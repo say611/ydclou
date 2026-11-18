@@ -266,6 +266,7 @@ server {
 
 | 现象 | 原因 / 处理 |
 |---|---|
+| **点「获取验证码」收不到短信** | 发码不是调一个接口就完事，必须先在 139 登录页勾选协议、过拼图滑块。面板会自动打开登录页并尝试勾协议 + 过滑块，失败时会直接报出原因（不会再假装成功）。若提示「滑块没过」，点「139网页登录」，在画面里手动拖一下滑块即可，倒计时出现后正常收码。另外同一号码约 60 秒内只能发一次，滑块图片加载中（提示「页面加载中」）时不要抢点 |
 | **双击 `start.bat` 窗口一闪就没** | 多半是 `node` 不在 PATH。开 cmd 执行 `node -v` 验证；报「不是内部或外部命令」就说明没装或没勾 “Add to PATH”。装 Node 时勾选该项，或把 Node 安装目录加进系统 PATH 后重开窗口。新版 `start.bat` 已会自动在 `%ProgramFiles%\nodejs`、`%LOCALAPPDATA%\Programs\nodejs`、`%APPDATA%\nvm` 等位置查找 `node.exe`，并打印实际使用的路径 |
 | 打不开页面 | 服务没起：`node server.js`；或端口被占：`PORT=8788 node server.js` |
 | 端口被占用 | Windows `netstat -ano \| findstr 8787` 查 PID；Linux `lsof -i:8787` |

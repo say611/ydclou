@@ -26,6 +26,7 @@ const browserSessions = new Map(); // accountId -> BrowserSession
 /* ---------------- 基础工具 ---------------- */
 const now = () => Date.now();
 const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function send(res, code, obj, type = 'application/json; charset=utf-8') {
   const body = type.startsWith('application/json') ? JSON.stringify(obj) : obj;
@@ -835,6 +836,126 @@ async function handle(req, res, pathname, qs) {
     }
   }
 
+  /* ===== 真实短信登录（浏览器驱动） =====
+     139 的发码必须先在页面上勾协议、过拼图滑块，没有可直接调的发码接口，
+     所以走浏览器把这几步做完，而不是假装成功。 */
+  async function ensureLoginPage(a, phone) {
+    let bs = browserSessions.get(a.id);
+    const created = !bs || !bs.alive;
+    if (created) {
+      if (!findBrowser()) throw new Error('本机没找到 Edge/Chrome，无法自动发码；请改用「139网页登录」在画面里手动完成');
+      bs = await BrowserSession.create(String(a.id).replace(/^acc_/, ''), phone);
+      browserSessions.set(a.id, bs);
+      await bs.navigate('https://cloud.139.com/#/cloudAppList');
+      await sleep(3800);
+    }
+
+    // 确认登录表单已出现（可能是复用的会话，停在列表页）
+    const hasForm = () => bs.evalJs(
+      `(() => [...document.querySelectorAll('input')].some(i => /手机号|phone/i.test(i.placeholder || '')))()`
+    );
+    if (!(await hasForm())) {
+      const clicked = await bs.clickText('去登录');
+      if (!clicked) {
+        await bs.navigate('https://cloud.139.com/#/cloudAppList');
+        await sleep(3800);
+        await bs.clickText('去登录');
+      }
+      await sleep(2400);
+    }
+    if (!(await hasForm())) throw new Error('登录页没打开（可能已登录或站点结构变化），请点「139网页登录」看一眼画面');
+    return bs;
+  }
+
+  async function realSmsSend(a, phone) {
+    const bs = await ensureLoginPage(a, phone);
+
+    const filled = await bs.fillPhone(phone);
+    if (!filled || !filled.ok) throw new Error('登录页上没找到手机号输入框');
+
+    const proto = await bs.tickProtocol();
+    if (proto && proto.ok && proto.via === 'dom') { await bs.tap(proto.x, proto.y); await sleep(400); }
+    if (proto && proto.ok === false) throw new Error('没找到「同意协议」勾选框，站点结构可能变了');
+
+    // 按钮若在倒计时，说明刚发过，别硬点
+    const btnState = await bs.evalJs(`(() => {
+      const texts = [...document.querySelectorAll('button')].map(x => (x.innerText || '').trim());
+      return {
+        canSend: texts.some(t => /获取验证码|重新获取/.test(t)),
+        countdown: texts.find(t => /^\\d+\\s*s?$/i.test(t)) || null
+      };
+    })()`);
+    if (!btnState.canSend && btnState.countdown) {
+      throw new Error(`刚发过验证码，还剩 ${btnState.countdown} 才能重发`);
+    }
+
+    const btn = await bs.clickText('获取验证码');
+    if (!btn) throw new Error('没找到「获取验证码」按钮');
+
+    await sleep(1200);
+
+    // 关键：弹窗会先出现骨架，图片是异步加载的；没等图片 ready 去量缺口必然量错
+    const imagesReady = () => bs.waitFor(`(() => {
+      const a = document.querySelector('.img_bg img');
+      const p = document.querySelector('.img_slider img');
+      if (!a || !p) return false;
+      if (!(a.complete && p.complete && a.naturalWidth > 0 && p.naturalWidth > 0)) return false;
+      const toast = document.querySelector('.van-toast, [class*=toast]');
+      if (toast && /加载中|loading/i.test(toast.innerText || '')) return false;
+      return true;
+    })()`, 12000, 250);
+
+    // 拼图滑块最多试 3 轮，失败会换新图，交替使用两种定位策略
+    const steps = [];
+    const strategies = ['geom', 'sad', 'geom'];
+    for (let i = 0; i < strategies.length; i++) {
+      const hasSlider = await bs.evalJs(`!!document.querySelector('.dv_handler')`);
+      if (!hasSlider) break;
+      const ready = await imagesReady();
+      if (!ready) { steps.push(`第${i + 1}次：图片未加载完，跳过`); continue; }
+      const r = await bs.solveSlider(strategies[i]);
+      const dbg = `dist=${r.dist == null ? '-' : r.dist} moved=${r.drag ? r.drag.moved : '-'}`
+        + (r.geo ? ` 簇=${JSON.stringify(r.geo.whiteSpan || null)} sad=${r.geo.sadOffset}` : '')
+        + (r.after && r.after.toast ? ` 提示=${r.after.toast}` : '');
+      steps.push(r.ok
+        ? `第${i + 1}次滑块通过 ${r.dist}px（${strategies[i]}）`
+        : `第${i + 1}次失败(${strategies[i]}) ${dbg}`);
+      if (r.ok) break;
+      await sleep(1600);
+    }
+
+    const st = await bs.evalJs(`(() => {
+      const cd = [...document.querySelectorAll('button')].map(b => (b.innerText || '').trim())
+        .find(t => /\\d+\\s*s|重新获取|已发送/i.test(t));
+      const dlg = [...document.querySelectorAll('.van-dialog,[role=dialog]')].find(e => /安全验证/.test(e.innerText || ''));
+      return { countdown: cd || null, sliderOpen: !!dlg };
+    })()`);
+
+    if (!st.countdown) {
+      const detail = steps.length ? '（' + steps.join('；') + '）' : '';
+      throw new Error(st.sliderOpen
+        ? '滑块没过，验证码没发出去' + detail + '；可点「139网页登录」在画面里手动拖一下滑块'
+        : '页面没有进入倒计时，验证码可能未发出' + detail);
+    }
+    return { countdown: st.countdown, steps };
+  }
+
+  async function realSmsVerify(a, code) {
+    const bs = browserSessions.get(a.id);
+    if (!bs || !bs.alive) throw new Error('登录页已关闭，请重新点「获取验证码」');
+    const f = await bs.fillCode(code);
+    if (!f || !f.ok) throw new Error('登录页上没找到验证码输入框');
+    const btn = await bs.clickText('登录');
+    if (!btn) throw new Error('没找到「登录」按钮');
+
+    await bs.waitFor(`(() => { try { return !!localStorage.getItem('nToken'); } catch (e) { return false; } })()`, 15000, 600);
+    await sleep(1500);
+    const h = await bs.harvest();
+    const tk = h.apiToken || (h.best && h.best.value);
+    if (!tk) throw new Error('登录未完成或没刮到 token');
+    return { token: tk, uuid: h.uuid || '' };
+  }
+
   /* ===== 登录会话（浏览器驱动） ===== */
   if (pathname === '/api/sessions/begin' && method === 'POST') {
     const b = await readBody(req);
@@ -889,39 +1010,60 @@ async function handle(req, res, pathname, qs) {
       return ok(res);
     }
     if (op === 'send') {
-      if (sess) { sess.phase = 'code-sent'; sess.message = '验证码已发送'; }
-      dbm.log(db, { level: 'info', account: a.title, plan: '', source: 'login', message: `📨 验证码已发送至 ${a.phone}${db.settings.apiMode === 'mock' ? '（模拟模式：任意 4~6 位数字均可）' : ''}` });
-      dbm.save();
-      return ok(res, { message: '验证码已发送' });
+      const b = await readBody(req).catch(() => ({}));
+      const phone = String(b.phone || a.phone || '').replace(/\D/g, '');
+      if (!/^1\d{10}$/.test(phone)) return bad(res, '手机号格式不对');
+      a.phone = phone;
+      if (sess) { sess.phase = 'sending'; sess.message = '正在过滑块并发送验证码…'; }
+      try {
+        const r = await realSmsSend(a, phone);
+        if (sess) { sess.phase = 'code-sent'; sess.message = `验证码已发送（${r.countdown} 后可重发）`; }
+        dbm.log(db, {
+          level: 'info', account: a.title, plan: '', source: 'login',
+          message: `📨 验证码已发送至 ${phone}` + (r.steps.length ? `（${r.steps.join('；')}）` : '')
+        });
+        dbm.save();
+        return ok(res, { message: '验证码已发送', countdown: r.countdown, steps: r.steps });
+      } catch (e) {
+        if (sess) { sess.phase = 'form'; sess.message = e.message; }
+        dbm.log(db, { level: 'warn', account: a.title, plan: '', source: 'login', message: '❌ 发码失败：' + e.message });
+        dbm.save();
+        return bad(res, e.message);
+      }
     }
     if (op === 'verify') {
       const b = await readBody(req);
       const code = String(b.code || '').replace(/\D/g, '');
       if (code.length < 4) return bad(res, '验证码位数不足');
-      if (db.settings.apiMode === 'real' && db.adapter.parsed) {
-        // 真实模式：从浏览器会话里刮 token（等价原站“抓取登录态”）
-        const bs = browserSessions.get(a.id);
-        if (bs && bs.alive) {
-          try {
-            await bs.navigate('https://cloud.139.com/#/cloudAppList');
-            const h = await bs.harvest();
-            const tk = h.apiToken || (h.best && h.best.value);
-            if (tk) {
-              a.cpToken = tk;
-              a.cpDeviceId = h.uuid || a.cpDeviceId || '';
-              a.cpDeviceFp = a.cpDeviceFp || 'fp_' + Math.random().toString(36).slice(2, 12);
-              a.loggedIn = true;
-              a.session = { status: 'valid', issuedAt: now(), lastOkAt: now(), expiresAt: now() + 30 * DAY };
-              await refreshDevices(a, 'login');
-              if (sess) { sess.phase = 'ok'; sess.message = '登录成功'; }
-              dbm.log(db, { level: 'info', account: a.title, plan: (pickDevice(a) || {}).plan || '', source: 'login', message: '✅ 登录成功：token 已回写面板，保活与看玩共用同一会话' });
-              dbm.save();
-              return ok(res, { state: stateFor(me), message: '登录成功' });
-            }
-          } catch (_) {}
+
+      const bs = browserSessions.get(a.id);
+      if (bs && bs.alive) {
+        // 真实路径：把验证码填进页面、点登录、刮 token
+        try {
+          const r = await realSmsVerify(a, code);
+          a.cpToken = r.token;
+          a.cpDeviceId = r.uuid || a.cpDeviceId || '';
+          a.cpDeviceFp = a.cpDeviceFp || 'fp_' + Math.random().toString(36).slice(2, 12);
+          a.loggedIn = true;
+          a.loginPhase = 'ok';
+          a.session = { status: 'valid', issuedAt: now(), lastOkAt: now(), expiresAt: now() + 30 * DAY };
+          try { await refreshDevices(a, 'login'); } catch (_) {}
+          if (sess) { sess.phase = 'ok'; sess.message = '登录成功'; }
+          dbm.log(db, { level: 'info', account: a.title, plan: (pickDevice(a) || {}).plan || '', source: 'login', message: '✅ 登录成功：token 已回写面板，保活与看玩共用同一会话' });
+          dbm.save();
+          return ok(res, { state: stateFor(me), message: '登录成功' });
+        } catch (e) {
+          if (sess) { sess.phase = 'form'; sess.message = e.message; }
+          dbm.log(db, { level: 'warn', account: a.title, plan: '', source: 'login', message: '❌ 登录失败：' + e.message });
+          dbm.save();
+          return bad(res, e.message);
         }
-        return bad(res, '没能从页面里刮到登录态，请在画面里手动完成登录后再点一次');
       }
+
+      if (db.settings.apiMode === 'real') {
+        return bad(res, '没有可用的登录页会话，请先点「发送验证码」');
+      }
+
       // 模拟模式：直接放行
       a.loggedIn = true;
       a.cpToken = a.cpToken || 'mock_' + Math.random().toString(16).slice(2, 18);
@@ -929,7 +1071,7 @@ async function handle(req, res, pathname, qs) {
       a.session = { status: 'valid', issuedAt: now(), lastOkAt: now(), expiresAt: now() + 30 * DAY };
       if (!a.devices.length) a.devices = [{ id: Math.random().toString(36).slice(2, 10), plan: '云手机', power: 'on', onSince: now(), statusText: '运行中' }];
       if (sess) { sess.phase = 'ok'; sess.message = '登录成功'; }
-      dbm.log(db, { level: 'info', account: a.title, plan: (pickDevice(a) || {}).plan || '', source: 'login', message: '✅ 登录成功：token 已回写面板，保活与看玩共用同一会话' });
+      dbm.log(db, { level: 'info', account: a.title, plan: (pickDevice(a) || {}).plan || '', source: 'login', message: '✅ 登录成功（模拟模式）：token 已回写面板' });
       dbm.log(db, { level: 'info', account: a.title, plan: (pickDevice(a) || {}).plan || '', source: 'refresh', message: `📡 已从服务器同步：${a.devices.length} 台云手机（${a.devices.map((d) => d.id).join(',')}）` });
       dbm.save();
       return ok(res, { state: stateFor(me), message: '登录成功' });
@@ -952,27 +1094,10 @@ async function handle(req, res, pathname, qs) {
   }
   if (pathname === '/api/auth/sms/send' && method === 'POST') {
     const b = await readBody(req);
-    const phone = String(b.phone || '');
+    const phone = String(b.phone || '').replace(/\D/g, '');
     if (!/^1\d{10}$/.test(phone)) return bad(res, '手机号格式不对');
-    const a = db.accounts.find((x) => x.phone === phone && x.owner === me.id) || db.accounts.find((x) => x.phone === phone);
-    if (a) {
-      a.loginPhase = 'code-sent';
-      dbm.log(db, { level: 'info', account: a.title, plan: '', source: 'login', message: `📨 验证码已发送至 ${phone}` });
-      dbm.save();
-    }
-    return ok(res, { message: '验证码已发送' });
-  }
-  if (pathname === '/api/auth/sms/state' && method === 'GET') {
-    const accId = qs.get('acc');
-    const a = db.accounts.find((x) => x.id === accId);
-    return ok(res, { phase: a ? a.loginPhase || 'idle' : 'idle' });
-  }
-  if (pathname === '/api/auth/sms/verify' && method === 'POST') {
-    const b = await readBody(req);
-    const phone = String(b.phone || '');
-    const code = String(b.code || '').replace(/\D/g, '');
-    if (code.length < 4) return bad(res, '验证码位数不足');
-    let a = db.accounts.find((x) => x.phone === phone);
+
+    let a = db.accounts.find((x) => x.phone === phone && x.owner === me.id) || db.accounts.find((x) => x.phone === phone);
     if (!a) {
       if (me.role !== 'admin' && db.accounts.filter((x) => x.owner === me.id).length >= me.quota) {
         return bad(res, `配额已满（${me.quota} 个）`);
@@ -985,14 +1110,55 @@ async function handle(req, res, pathname, qs) {
       };
       db.accounts.push(a);
     }
-    a.loggedIn = true;
-    a.loginPhase = 'ok';
-    a.cpToken = a.cpToken || 'mock_' + Math.random().toString(16).slice(2, 18);
-    a.session = { status: 'valid', issuedAt: now(), lastOkAt: now(), expiresAt: now() + 30 * DAY };
-    if (!a.devices.length) a.devices = [{ id: Math.random().toString(36).slice(2, 10), plan: '云手机', power: 'on', onSince: now(), statusText: '运行中' }];
-    dbm.log(db, { level: 'info', account: a.title, plan: (pickDevice(a) || {}).plan || '', source: 'login', message: '✅ 登录成功：token 已回写面板，保活与看玩共用同一会话' });
-    dbm.save();
-    return ok(res, { state: stateFor(me), message: '登录成功' });
+    if (!db.sessions[a.id]) {
+      db.sessions[a.id] = { id: a.id, phone, phase: 'wait-code', accountId: a.id, createdAt: now(), message: '登录页已打开' };
+    }
+
+    try {
+      const r = await realSmsSend(a, phone);
+      a.loginPhase = 'code-sent';
+      db.sessions[a.id].phase = 'code-sent';
+      db.sessions[a.id].message = `验证码已发送（${r.countdown} 后可重发）`;
+      dbm.log(db, { level: 'info', account: a.title, plan: '', source: 'login', message: `📨 验证码已发送至 ${phone}` });
+      dbm.save();
+      return ok(res, { message: '验证码已发送', accountId: a.id, countdown: r.countdown });
+    } catch (e) {
+      dbm.log(db, { level: 'warn', account: a.title, plan: '', source: 'login', message: '❌ 发码失败：' + e.message });
+      dbm.save();
+      return bad(res, e.message);
+    }
+  }
+  if (pathname === '/api/auth/sms/state' && method === 'GET') {
+    const accId = qs.get('acc');
+    const a = db.accounts.find((x) => x.id === accId);
+    return ok(res, { phase: a ? a.loginPhase || 'idle' : 'idle' });
+  }
+  if (pathname === '/api/auth/sms/verify' && method === 'POST') {
+    const b = await readBody(req);
+    const phone = String(b.phone || '').replace(/\D/g, '');
+    const code = String(b.code || '').replace(/\D/g, '');
+    if (code.length < 4) return bad(res, '验证码位数不足');
+    let a = db.accounts.find((x) => x.phone === phone);
+    if (!a) return bad(res, '请先点「获取验证码」，等 139 的登录页打开后再确认登录');
+
+    try {
+      const r = await realSmsVerify(a, code);
+      a.loggedIn = true;
+      a.loginPhase = 'ok';
+      a.cpToken = r.token;
+      a.cpDeviceId = r.uuid || a.cpDeviceId || '';
+      a.cpDeviceFp = a.cpDeviceFp || 'fp_' + Math.random().toString(36).slice(2, 12);
+      a.session = { status: 'valid', issuedAt: now(), lastOkAt: now(), expiresAt: now() + 30 * DAY };
+      try { await refreshDevices(a, 'login'); } catch (_) {}
+      if (db.sessions[a.id]) { db.sessions[a.id].phase = 'ok'; db.sessions[a.id].message = '登录成功'; }
+      dbm.log(db, { level: 'info', account: a.title, plan: (pickDevice(a) || {}).plan || '', source: 'login', message: '✅ 登录成功：token 已回写面板，保活与看玩共用同一会话' });
+      dbm.save();
+      return ok(res, { state: stateFor(me), accountId: a.id, message: '登录成功' });
+    } catch (e) {
+      dbm.log(db, { level: 'warn', account: a.title, plan: '', source: 'login', message: '❌ 登录失败：' + e.message });
+      dbm.save();
+      return bad(res, e.message);
+    }
   }
 
   return bad(res, '接口不存在', 404);
