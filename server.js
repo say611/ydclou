@@ -19,6 +19,26 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const CP_HOME = 'https://cp.139.com/';
 const DAY = dbm.DAY;
 
+/* 禁用号码：DENY_PHONES 环境变量（逗号分隔）或 data/deny-phones.txt（每行一个，# 注释）。
+ * 命中的号码一律拒绝发码 / 登录 / 建账号。真实号码只放本地 data/ 下，不写进代码、不进仓库。 */
+const DENY_FILE = path.join(__dirname, 'data', 'deny-phones.txt');
+function loadDenyPhones() {
+  const list = String(process.env.DENY_PHONES || '').split(',').map((x) => x.replace(/\D/g, ''))
+    .filter((x) => x.length === 11);
+  try {
+    if (fs.existsSync(DENY_FILE)) {
+      for (const line of fs.readFileSync(DENY_FILE, 'utf8').split(/\r?\n/)) {
+        const s = line.replace(/#.*/, '').replace(/\D/g, '');
+        if (s.length === 11) list.push(s);
+      }
+    }
+  } catch (_) {}
+  return [...new Set(list)];
+}
+let DENY_PHONES = loadDenyPhones();
+const isDeniedPhone = (p) => DENY_PHONES.includes(String(p || '').replace(/\D/g, ''));
+const denyMsg = '该号码已列入禁用名单（data/deny-phones.txt），不允许发码或登录';
+
 const db = dbm.load();
 const db_ = () => db;
 const browserSessions = new Map(); // accountId -> BrowserSession
@@ -956,6 +976,7 @@ async function handle(req, res, pathname, qs) {
     const b = await readBody(req);
     const phone = String(b.phone || '');
     if (!/^1\d{10}$/.test(phone)) return bad(res, '手机号格式不对');
+      if (isDeniedPhone(phone)) return bad(res, denyMsg);
     const mine = db.accounts.filter((x) => x.owner === me.id);
     if (me.role !== 'admin' && mine.length >= me.quota) return bad(res, `配额已满（${me.quota} 个）`);
     let a = db.accounts.find((x) => x.owner === me.id && x.phone === phone);
@@ -1008,6 +1029,7 @@ async function handle(req, res, pathname, qs) {
       const b = await readBody(req).catch(() => ({}));
       const phone = String(b.phone || a.phone || '').replace(/\D/g, '');
       if (!/^1\d{10}$/.test(phone)) return bad(res, '手机号格式不对');
+      if (isDeniedPhone(phone)) return bad(res, denyMsg);
       a.phone = phone;
       if (sess) { sess.phase = 'sending'; sess.message = '正在过滑块并发送验证码…'; }
       try {
@@ -1091,6 +1113,7 @@ async function handle(req, res, pathname, qs) {
     const b = await readBody(req);
     const phone = String(b.phone || '').replace(/\D/g, '');
     if (!/^1\d{10}$/.test(phone)) return bad(res, '手机号格式不对');
+      if (isDeniedPhone(phone)) return bad(res, denyMsg);
 
     let a = db.accounts.find((x) => x.phone === phone && x.owner === me.id) || db.accounts.find((x) => x.phone === phone);
     if (!a) {
