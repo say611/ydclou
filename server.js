@@ -201,20 +201,33 @@ async function runPulse(a, source) {
 
   a.lastRunAt = now();
   a.session = a.session || {};
-  a.session.lastOkAt = now();
+  if (result.ok && result.via !== 'mock') a.session.lastOkAt = now();
 
   if (dev) {
     dev.realAt = now();
     dev.realCode = result.ok ? 0 : result.code ?? -1;
-    dev.realText = result.ok ? '在线 · 运行中' : `异常：${result.text}`;
+    dev.realText = result.ok
+      ? (result.via === 'mock' ? '模拟在线（未接真实接口）' : '在线 · 运行中')
+      : `异常：${result.text}`;
     if (result.ok) {
       dev.power = 'on';
-      dev.statusText = '运行中（服务器确认）';
+      dev.statusText = result.via === 'mock' ? '运行中（模拟）' : '运行中（服务器确认）';
       if (!dev.onSince) dev.onSince = now();
     }
   }
 
-  if (result.ok) {
+  if (result.ok && result.via === 'mock') {
+    // 模拟脉冲：不能报“注入成功”，否则会以为云手机真在保活
+    a.success = (a.success || 0) + 1;
+    a.lastResult = 'mock';
+    dbm.log(db, {
+      level: 'info',
+      account: a.title,
+      plan,
+      source,
+      message: `🧪 保活脉冲（模拟）：未调用真实接口，云手机状态未改变（${result.ms}ms）。要用真实保活请把接口模式切到 real 并完成 139 登录`
+    });
+  } else if (result.ok) {
     a.success = (a.success || 0) + 1;
     a.lastResult = 'ok';
     dbm.log(db, {
@@ -723,7 +736,7 @@ async function handle(req, res, pathname, qs) {
     });
   }
 
-  /* ===== 设备电源 ===== */
+  /* ===== 设备电源（real 模式真调接口，mock 模式明确标“模拟”） ===== */
   if ((mm = m(/^\/api\/devices\/([\w-]+)\/power$/)) && method === 'POST') {
     const b = await readBody(req);
     let hit = null;
@@ -731,20 +744,70 @@ async function handle(req, res, pathname, qs) {
       for (const d of a.devices || []) if (d.id === mm[1]) hit = { a, d };
     }
     if (!hit) return bad(res, '设备不存在');
-    const on = b.action === 'on' || b.action === 'start';
+
+    const action = String(b.action || 'on').toLowerCase();
+    const isRestart = action === 'restart' || action === 'reboot';
+    const on = action === 'on' || action === 'start' || action === 'prepare';
+    const real = db.settings.apiMode === 'real';
+    const instanceId = hit.d.instanceId || hit.d.id;
+
+    // 重启：端点没确认，直接拒绝，绝不假装成功，也绝不退化成关机
+    if (isRestart) {
+      dbm.log(db, {
+        level: 'warn', account: hit.a.title, plan: hit.d.plan, source: 'power',
+        message: '⚠️ 重启未执行：139 没有确认过重启接口（只有开机 instancePrepareV2 与关机 shutdown）'
+      });
+      dbm.save();
+      return bad(res, '重启接口尚未确认，未下发任何指令（已阻止假成功）。可用「开机」等价触发 instancePrepareV2');
+    }
+
+    let r = null;
+    if (real && hit.a.cpToken) {
+      try {
+        r = await cp139.power({
+          token: hit.a.cpToken,
+          instanceId,
+          deviceId: hit.d.deviceId || hit.a.cpDeviceId || '',
+          action: on ? 'on' : 'off'
+        });
+      } catch (e) {
+        dbm.log(db, {
+          level: 'warn', account: hit.a.title, plan: hit.d.plan, source: 'power',
+          message: '❌ 电源指令下发失败：' + e.message
+        });
+        dbm.save();
+        return bad(res, '电源指令下发失败：' + e.message);
+      }
+      // 真实返回：ok 才改状态
+      if (!r || !r.ok) {
+        const txt = (r && (r.message || r.text)) || '接口返回非 200';
+        dbm.log(db, {
+          level: 'warn', account: hit.a.title, plan: hit.d.plan, source: 'power',
+          message: `❌ ${on ? '开机' : '关机'}失败（${r ? r.code : '-'}）：${String(txt).slice(0, 80)}`
+        });
+        dbm.save();
+        return bad(res, `${on ? '开机' : '关机'}失败：${String(txt).slice(0, 80)}`);
+      }
+    }
+
     hit.d.power = on ? 'on' : 'off';
-    hit.d.statusText = on ? '运行中（服务器确认）' : '已关机';
+    hit.d.statusText = real && r ? (on ? '运行中（接口已确认）' : '已关机（接口已确认）') : (on ? '运行中（模拟）' : '已关机（模拟）');
     hit.d.onSince = on ? now() : null;
-    hit.d.realAt = now();
+    hit.d.realAt = real && r ? now() : null;
     dbm.log(db, {
       level: 'info',
       account: hit.a.title,
       plan: hit.d.plan,
       source: 'power',
-      message: on ? '⏻ 已下发开机指令' : '⏻ 已下关机指令'
+      message: (real && r ? (on ? '⏻ 已下发开机指令' : '⏻ 已下发关机指令') : (on ? '⏻ 开机（模拟，未接真实接口）' : '⏻ 关机（模拟，未接真实接口）'))
+        + (r && r.ms != null ? ` · ${r.ms}ms` : '')
     });
     dbm.save();
-    return ok(res, { state: stateFor(me), message: on ? '已下发开机' : '已下发关机' });
+    return ok(res, {
+      state: stateFor(me),
+      simulated: !(real && r),
+      message: (real && r ? (on ? '已下发开机' : '已下发关机') : (on ? '已模拟开机（未接真实接口）' : '已模拟关机（未接真实接口）'))
+    });
   }
 
   /* ===== 画面镜像 ===== */
