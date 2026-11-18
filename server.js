@@ -709,9 +709,12 @@ async function handle(req, res, pathname, qs) {
     return ok(res, {
       state: stateFor(me),
       ok: r.ok,
-      message: r.ok
-        ? '✨ 保活脉冲注入成功（instancePrepareV2 已下发），云手机保持活跃，保活计时已清零！'
-        : `保活失败：${r.text}`
+      simulated: r.via === 'mock',
+      message: !r.ok
+        ? `保活失败：${r.text}`
+        : (r.via === 'mock'
+          ? '🧪 保活脉冲（模拟）：未调用真实接口，云手机状态未改变。要真保活请切到 real 模式并完成 139 登录'
+          : '✨ 保活脉冲注入成功（instancePrepareV2 已下发），云手机保持活跃，保活计时已清零！')
     });
   }
 
