@@ -107,6 +107,7 @@ node server.js
 | `PORT` | `8787` | 面板监听端口 |
 | `HOST` | `127.0.0.1` | 监听地址；设 `0.0.0.0` 才允许外部访问 |
 | `CTRL_PORT` | `8899` | 仅 `driver.js` 用，常驻浏览器的控制口 |
+| `DENY_PHONES` | 空 | 禁用号码，逗号分隔；命中的号一律拒绝发码/登录/建账号 |
 
 示例：
 
@@ -127,6 +128,44 @@ set PORT=9000 && node server.js               :: Windows cmd
 | 页面自动刷新 | 20 秒 | 前端拉取状态的周期 |
 | 看玩模式 | resident 常驻 | 保持会话热态 |
 | 注册审核 | 关闭 | 开启后新用户需管理员点「通过审核」 |
+
+### 3.1 禁用号码（避免误发短信）
+
+两种写法，任选其一或同时用：
+
+```bash
+# 方式一：环境变量
+DENY_PHONES=13800000000,13900000000 node server.js
+```
+
+```text
+# 方式二：本地文件 data/deny-phones.txt（一行一个号，# 为注释）
+# 该文件在 data/ 下，已被 .gitignore 忽略，不会进仓库
+13800000000
+```
+
+命中名单的号码在这三处直接拒绝：`POST /api/sessions/begin`、`POST /api/auth/sms/send`、新建账号。
+返回：`{"ok":false,"message":"该号码已列入禁用名单…"}`
+
+### 3.2 调试滑块而不发短信
+
+浏览器层支持断网级别的请求拦截，拦住发码接口后滑块照样弹出、算法照样可调，但短信一条都出不去：
+
+```js
+const s = await BrowserSession.create('dbg', '');
+await s.blockUrls(['*/login/sendCode*', '*/login/validateCode*']);
+```
+
+注意：拦截后「是否通过」判定会变成 false（后续请求失败，弹窗不关），
+纯算法迭代请看 `r.drag.err`（对齐误差，单位 CSS px）和截图。
+
+### 3.3 临时浏览器 profile
+
+登录页由本机 Edge/Chrome 无头实例驱动，profile 放在系统临时目录 `kp-browser-<账号id>`。
+
+- **每次启动都用全新 profile**，启动前会删掉同名旧目录
+- **关闭会话时自动删除**该目录
+- 目的：不让站点 localStorage / 表单历史（包括上次登录的手机号）残留，避免下次打开自动填回旧号码
 
 ---
 
