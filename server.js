@@ -323,12 +323,15 @@ async function refreshDevices(a, source = 'refresh') {
     }
   }
   if (!a.devices || !a.devices.length) {
+    // 拿不到真实列表时才造模拟设备，必须打标记：否则这个假 id 后面会被拿去调真实接口，
+    // 表现为“点重启没反应 / 云机不存在”。
     a.devices = [{
-      id: Math.random().toString(36).slice(2, 10),
+      id: 'mock_' + Math.random().toString(36).slice(2, 8),
+      mock: true,
       plan: '云手机',
       power: 'on',
       onSince: now(),
-      statusText: '运行中'
+      statusText: '模拟设备（未同步真实列表）'
     }];
   }
   for (const d of a.devices) {
@@ -336,12 +339,15 @@ async function refreshDevices(a, source = 'refresh') {
     d.realCode = 0;
     d.realText = '在线 · 运行中';
   }
+  const realSynced = real && a.cpToken && a.devices.length && !a.devices[0].mock;
   dbm.log(db, {
     level: 'info',
     account: a.title,
     plan: a.devices[0] ? a.devices[0].plan : '',
     source,
-    message: `📡 已从服务器同步：${a.devices.length} 台云手机（${a.devices.map((d) => d.id).join(',')}）`
+    message: (realSynced
+      ? `📡 已从服务器同步：${a.devices.length} 台云手机（${a.devices.map((d) => d.id).join(',')}）`
+      : `🧪 本地模拟设备：${a.devices.length} 台（${a.devices.map((d) => d.id).join(',')}），未调用真实接口`)
   });
 }
 
@@ -752,18 +758,51 @@ async function handle(req, res, pathname, qs) {
     const isRestart = action === 'restart' || action === 'reboot';
     const on = action === 'on' || action === 'start' || action === 'prepare';
     const real = db.settings.apiMode === 'real';
-    const instanceId = hit.d.instanceId || hit.d.id;
+    let instanceId = hit.d.instanceId || hit.d.id;
+
+    // real 模式下，本地设备若是 mock 生成的假设备（id 对不上真实 instanceId），
+    // 先同步一次真实列表把 ID 纠正过来，否则后续接口全部报“云机不存在”。
+    if (real && hit.a.cpToken && (hit.d.mock || !hit.d.instanceId)) {
+      try {
+        await refreshDevices(hit.a, 'power');
+        let found = null;
+        for (const d of hit.a.devices || []) if (d.id === mm[1]) found = d;
+        // 本地 id 是 mock 随机生成的，同步后按真实实例兜底重定向
+        if (!found && hit.a.devices && hit.a.devices.length && !hit.a.devices[0].mock) found = hit.a.devices[0];
+        if (found) {
+          hit.d = found;
+          instanceId = hit.d.instanceId || hit.d.id;
+          dbm.log(db, {
+            level: 'info', account: hit.a.title, plan: hit.d.plan, source: 'power',
+            message: `🔧 检测到本地设备 ID 与真实实例不一致，已自动纠正为 ${instanceId}`
+          });
+          dbm.save();
+        }
+      } catch (_) {}
+    }
 
     // 重启：真实端点已确认 —— /uniphone/device/reboot {"phoneId": instanceId}
     if (isRestart) {
-      if (!(real && hit.a.cpToken)) {
-        hit.d.statusText = '重启需真实模式已登录';
+      if (!real) {
+        hit.d.statusText = '重启未执行：当前是模拟模式';
         dbm.log(db, {
           level: 'warn', account: hit.a.title, plan: hit.d.plan, source: 'power',
-          message: '⚠️ 重启未执行：需要 real 模式 + 已完成的 139 登录（当前为模拟/无 token）'
+          message: '⚠️ 重启未执行：当前接口模式是 mock（模拟），重启不会真实下发'
         });
         dbm.save();
-        return bad(res, '重启需要真实接口与登录态：请把接口模式切到 real 并完成 139 登录');
+        return bad(res, '当前是模拟模式（接口模式 = mock），重启不会真实下发。请到「保活设置」把接口模式切到 real 后再点重启');
+      }
+      if (!hit.a.cpToken) {
+        hit.d.statusText = '重启未执行：账号未完成 139 登录';
+        dbm.log(db, {
+          level: 'warn', account: hit.a.title, plan: hit.d.plan, source: 'power',
+          message: '⚠️ 重启未执行：该账号尚未完成 139 登录（无 token）'
+        });
+        dbm.save();
+        return bad(res, '该账号还没有完成 139 登录（没有登录态），请先在账号上完成 139 短信登录');
+      }
+      if (hit.d.mock) {
+        return bad(res, '无法确定真实云机 ID：请先登录账号并点「同步设备」后再重启');
       }
       let rb;
       try {
