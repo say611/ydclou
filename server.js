@@ -754,14 +754,49 @@ async function handle(req, res, pathname, qs) {
     const real = db.settings.apiMode === 'real';
     const instanceId = hit.d.instanceId || hit.d.id;
 
-    // 重启：端点没确认，直接拒绝，绝不假装成功，也绝不退化成关机
+    // 重启：真实端点已确认 —— /uniphone/device/reboot {"phoneId": instanceId}
     if (isRestart) {
+      if (!(real && hit.a.cpToken)) {
+        hit.d.statusText = '重启需真实模式已登录';
+        dbm.log(db, {
+          level: 'warn', account: hit.a.title, plan: hit.d.plan, source: 'power',
+          message: '⚠️ 重启未执行：需要 real 模式 + 已完成的 139 登录（当前为模拟/无 token）'
+        });
+        dbm.save();
+        return bad(res, '重启需要真实接口与登录态：请把接口模式切到 real 并完成 139 登录');
+      }
+      let rb;
+      try {
+        rb = await cp139.reboot({
+          token: hit.a.cpToken,
+          instanceId: instanceId,
+          deviceId: hit.d.deviceId || hit.a.cpDeviceId || ''
+        });
+      } catch (e) {
+        dbm.log(db, { level: 'warn', account: hit.a.title, plan: hit.d.plan, source: 'power', message: '❌ 重启下发失败：' + e.message });
+        dbm.save();
+        return bad(res, '重启下发失败：' + e.message);
+      }
+      if (!rb || !rb.ok) {
+        const txt = (rb && (rb.message || rb.text)) || '接口返回非 200';
+        dbm.log(db, {
+          level: 'warn', account: hit.a.title, plan: hit.d.plan, source: 'power',
+          message: `❌ 重启失败（${rb ? rb.code : '-'}）：${String(txt).slice(0, 80)}`
+        });
+        dbm.save();
+        return bad(res, `重启失败：${String(txt).slice(0, 80)}`);
+      }
+      hit.d.statusText = '重启中（已下发）';
+      hit.d.realAt = now();
+      hit.d.rebootAt = now();
       dbm.log(db, {
-        level: 'warn', account: hit.a.title, plan: hit.d.plan, source: 'power',
-        message: '⚠️ 重启未执行：139 没有确认过重启接口（只有开机 instancePrepareV2 与关机 shutdown）'
+        level: 'success', account: hit.a.title, plan: hit.d.plan, source: 'power',
+        message: `🔄 已下发重启（/device/reboot 返回 200，${rb.ms}ms），云手机正在重启`
       });
       dbm.save();
-      return bad(res, '重启接口尚未确认，未下发任何指令（已阻止假成功）。可用「开机」等价触发 instancePrepareV2');
+      // 重启后设备会进入启动中，10 秒后自动刷新一次状态
+      setTimeout(() => { refreshDevices(hit.a, 'refresh').catch(() => {}); }, 10000).unref?.();
+      return ok(res, { state: stateFor(me), simulated: false, message: '已下发重启，云手机正在重启（约 10 秒后自动刷新状态）' });
     }
 
     let r = null;
