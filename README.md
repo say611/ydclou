@@ -4,6 +4,43 @@
 
 ---
 
+## 0. 一键获取
+
+**方式一：git clone（推荐，方便后续 `git pull` 升级）**
+
+```bash
+git clone https://github.com/say611/ydclou.git && cd ydclou && node server.js
+```
+
+Windows 下用分号连接，其余相同：
+
+```powershell
+git clone https://github.com/say611/ydclou.git; cd ydclou; node server.js
+```
+
+**方式二：不装 git，直接下载 zip**
+
+```bash
+curl -L https://github.com/say611/ydclou/archive/refs/heads/main.zip -o ydclou.zip \
+  && unzip ydclou.zip && cd ydclou-main && node server.js
+```
+
+**方式三：在本页点右上角 `Code → Download ZIP`**，解压后进目录启动：
+
+```bash
+cd ydclou-main && node server.js
+```
+
+启动后浏览器打开 <http://127.0.0.1:8787>，默认账号 `admin / admin888`（登录后立即改密码）。
+
+需要改端口或对外监听：
+
+```bash
+PORT=9000 HOST=0.0.0.0 node server.js     # Windows cmd: set PORT=9000 && node server.js
+```
+
+---
+
 ## 1. 环境要求
 
 | 项目 | 要求 | 说明 |
