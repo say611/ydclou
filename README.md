@@ -1,104 +1,270 @@
-# 云手机保活控制台 · 逆向重建版
+# 部署说明（中文）
 
-对 `a128aad19da6c1834.app.workbuddy.host` 的完整重建：**前端原样复用，后端从零实现**，全部接口契约、数据结构、调度语义对齐原站。
+本文覆盖从零到稳定运行的全部步骤。全程**零外部依赖**，不需要 `npm install`。
 
-```
-.
-├── server.js           # 服务端主程序（零依赖 Node，全部路由 + 调度器）
-├── lib/
-│   ├── cp139.js        # ★ 真实适配器：自算 sign 直连 cloud.139.com
-│   ├── adapter.js      # cURL 解析 → 模板变量替换 → 重放（兼容其它接口）
-│   ├── browser.js      # CDP 驱动 Edge 无头（登录页/截图/点击/滑动/刮 token）
-│   └── db.js           # JSON 存储（原子写）+ 日志
-├── public/index.html   # 前端控制台（单文件）
-├── driver.js           # 常驻浏览器驱动（HTTP 控制口，逐步操作 + 抓包）
-├── capture139.js       # 一次性抓包脚本
-├── auto-login.js       # 自动走登录流程到发码
-├── start.bat           # Windows 双击启动
-├── 部署说明.md          # 中文部署文档（环境/常驻/反代/排错）
-├── docs/screenshot.png # 界面截图
-├── 139接口抓包报告.md   # 真实接口契约 + 签名算法（重要）
-└── LICENSE
-```
+---
 
-## 启动
+## 1. 环境要求
+
+| 项目 | 要求 | 说明 |
+|---|---|---|
+| Node.js | **18+** | 核心功能依赖全局 `fetch`，18 起可用 |
+| Node.js（浏览器层） | **22+** | `lib/browser.js` 用全局 `WebSocket` 连 CDP，22 起才稳定 |
+| 浏览器 | Edge 或 Chrome | 仅“139 网页登录 / 真实截屏”需要；不放浏览器层也能跑保活 |
+| 操作系统 | Windows / Linux / macOS | Windows 提供 `start.bat` |
+| 磁盘 | < 10 MB | 纯 JSON 存储 |
+| 网络 | 能访问 `cloud.139.com` | 走代理时注意 https 出站 |
+
+查看版本：
 
 ```bash
-node server.js          # http://127.0.0.1:8787
+node -v      # 建议 v22.x
 ```
 
-默认管理员 `admin / admin888`（普通用户注册后有效期 2 天，可被 `regReview` 拦成待审核）。
+> 只有 Node 18/20 也能用：保活、调度、面板全部正常，只是点「139网页登录」时会提示浏览器层不可用。
 
-完整部署（环境要求、环境变量、systemd 常驻、Nginx 反代、备份、排错）见 **[部署说明.md](部署说明.md)**。
+---
 
-## ★ 真实接口已打通（不是模拟）
+## 2. 快速启动
 
-用真实账号实测登录后抓包 + 复算签名（下方示例已全部占位符化），**自算 sign 直连官方接口返回 200**：
+### Windows
 
-```
-POST https://cloud.139.com/uniphone/device/instancePrepareV2
-sign = MD5(requestId + appId + token + secret + timestamp)
-→ {"header":{"status":"200"},"data":{"devicePrepareInfos":[{"instanceId":"<INSTANCE_ID>","status":0}]}}
-耗时 142~282ms
+双击 `start.bat`（会自动打开浏览器）。
 
-面板 real 模式实测：
-  同步设备 → 读到 1 台云机的套餐与到期时间
-  手动保活 → 142ms 成功，success 1/0，realCode 0
+或命令行：
+
+```bat
+cd /d 项目目录
+node server.js
 ```
 
-细节见 `139接口抓包报告.md`（完整报文、四组环境常量、配套接口清单）。
+### Linux / macOS
 
-## 已验证（本机实跑）
+```bash
+cd 项目目录
+node server.js
+# 控制台已启动  http://127.0.0.1:8787
+```
 
-| 项 | 结果 |
-|---|---|
-| 登录 / `x-auth-token` 鉴权 | ✅ 200，返回 token + me |
-| `GET /api/state` | ✅ settings/rounds/logs/users/accounts 全量 |
-| `/api/sessions/begin → send → verify` | ✅ 建账号、发码、登录成功、token 回写、设备同步 |
-| `POST /api/accounts/:id/run`（mock） | ✅ 脉冲成功，success+1 |
-| `POST /api/accounts/:id/run`（**real**） | ✅ 142ms 真实 200，realCode=0 |
-| 设备同步（**real**） | ✅ listV2 拉到实例与到期时间 |
-| 调度器自动轮次 | ✅ rounds 递增，`nextRoundAt` = +interval，日志 source=auto |
-| `/screen/snap?token=` | ✅ 返回 SVG 画面（真实模式返回浏览器截图 JPEG） |
-| `/api/adapter/config` 解析 | ✅ cURL 正确解析为 method/url/headers/body |
-| 前端 ↔ 后端 | ✅ 见 `docs/screenshot.png` |
+### 首次访问
 
-## 关键实现细节（与原站对齐）
+浏览器打开 <http://127.0.0.1:8787>
 
-**1. 保活 = 带签名的官方接口调用**
-主路径走 `lib/cp139.js`：`sign = MD5(requestId + appId + token + secret + timestamp)`，直接 `POST https://cloud.139.com/uniphone/device/instancePrepareV2`。备用路径是 cURL 模板回放（`adapter.parseCurl()`，占位符 `{{token}} {{instanceId}}`，`patchAuth()` 兜底替换 Authorization/Cookie/body），便于接别的运营商或接口改版。
+```
+用户名：admin
+密码：  admin888
+```
 
-**2. 调度器**
-`setInterval(15s)` 检查 `nextRoundAt`，到点对每个 `enabled` 账号跑一轮 → `rounds++`、`lastRoundAt=now`、`nextRoundAt=now+intervalMinutes*60000`。到期账号跳过并写 warn 日志（对应原站“跳过本轮”）。
+**登录后第一件事：右上角 →「管理员账号设置」改掉默认密码。**
 
-**3. 登录态获取（两种，对应原站两条入口）**
-- `/api/sessions/*`：起 Edge 无头打开 `cloud.139.com`，`snap` 走 `Page.captureScreenshot`，`tap/swipe` 走 `Input.dispatchMouseEvent`，登录后 `harvest()` 优先抓 `localStorage.nToken`（256 位）→ 这就是原站“画面里登录，token 自动回写”的实现。
-- `/api/auth/sms/*`：短信直登通道（预热 / 发码 / 校验）。
-- 面板“编辑”里还能手贴 `cpToken` + `cpDeviceFp`（原站同款字段）。
+`data/db.json` 在首次启动时自动生成，不需要手动建。
 
-**4. 画面**
-有浏览器会话 → 真实 JPEG 截图；无 → 现场生成 SVG（`<img>` 直接显示，含时间戳/设备/脉冲条，肉眼可辨“活着”）。
+---
 
-## 与原站的差异
+## 3. 配置项
 
-| 项 | 原站 | 本重建 |
+全部通过环境变量控制，无需改代码：
+
+| 变量 | 默认值 | 说明 |
 |---|---|---|
-| 网关 | CloudStudio Gateway，HTML 要 `?sharecode=` | 无（本地直连） |
-| 保活实现 | cURL 模板回放（管理员导入） | **内置签名算法直连官方接口** + 保留 cURL 回放兼容层 |
-| 滑块 | 有专门 `solve-slider` 策略 | 通用拖动（实测可过拼图） |
-| 通知 | `notifyOnFail` 字段存在 | 仅落日志，未接推送渠道 |
-| 数据存储 | 未知（推测 Redis/PG） | 单文件 JSON，够单机跑 |
-| 多租户 | 有 | 有（owner 隔离 + quota + 审核 + 到期） |
+| `PORT` | `8787` | 面板监听端口 |
+| `HOST` | `127.0.0.1` | 监听地址；设 `0.0.0.0` 才允许外部访问 |
+| `CTRL_PORT` | `8899` | 仅 `driver.js` 用，常驻浏览器的控制口 |
 
-## 接真机（只需要一个 token）
+示例：
 
-1. 任意浏览器登录 `cloud.139.com`（短信验证码）；
-2. F12 Console 执行 `localStorage.getItem('nToken')`，复制那串 **256 位十六进制**
-   （别拿 `nHwToken`，那是 492 位 JWT，用途不同）；
-3. 面板「保活设置」接口模式切 `真实`；账号「编辑」粘贴 token（可选再填 `deviceId`，即 `localStorage.uuid`）；
-4. 点「刷新」同步设备 → 点「立即保活」看返回。
+```bash
+PORT=9000 HOST=127.0.0.1 node server.js      # Linux/macOS
+```
 
-> 不想手动拿 token：点「139网页登录」在面板画面里走一遍短信登录，服务端会自动从
-> `localStorage.nToken` 刮下来写回账号（`/api/sessions/*` 已实现）。
+```bat
+set PORT=9000 && node server.js               :: Windows cmd
+```
 
-间隔别低于 10 分钟，运营商侧有频控。
+面板内的可调参数在「保活设置」里，落盘在 `data/db.json`：
+
+| 参数 | 默认 | 含义 |
+|---|---|---|
+| 接口模式 | `mock` | `mock` 模拟 / `real` 直连真实接口 |
+| 保活间隔 | 30 分钟 | **不建议低于 10 分钟**，运营商侧有频控 |
+| 页面自动刷新 | 20 秒 | 前端拉取状态的周期 |
+| 看玩模式 | resident 常驻 | 保持会话热态 |
+| 注册审核 | 关闭 | 开启后新用户需管理员点「通过审核」 |
+
+---
+
+## 4. 数据与备份
+
+```
+data/db.json      # 全部数据：用户、云机账号、日志、token、设置
+```
+
+- 单文件 JSON，**原子写**（先写 `.tmp` 再 rename），断电不会写坏
+- 文件损坏时会自动备份为 `db.json.broken.<时间戳>` 并重建空库
+- 备份：直接复制 `data/db.json`
+- 重置：停服务 → 删 `data/db.json` → 重启（会重新生成 `admin/admin888`）
+
+> ⚠️ `db.json` 里保存着云手机登录 token，属于凭据，**不要提交到 Git、不要发给他人**。
+
+---
+
+## 5. 后台常驻
+
+### Linux（systemd，推荐）
+
+创建 `/etc/systemd/system/kp-keepalive.service`：
+
+```ini
+[Unit]
+Description=CloudPhone KeepAlive Console
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/kp-keepalive
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=8787
+Environment=HOST=127.0.0.1
+
+[Install]
+WantedBy=multi-user.target
+```
+
+启用：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now kp-keepalive
+sudo systemctl status kp-keepalive
+journalctl -u kp-keepalive -f        # 看日志
+```
+
+### Windows（计划任务）
+
+1. 任务计划程序 → 创建任务
+2. 触发器：登录时 / 开机时
+3. 操作：程序填 `node.exe` 完整路径，参数填 `server.js`，起始于填项目目录
+4. 勾选「不管用户是否登录都要运行」「失败后重新启动」
+
+或者用 [nssm](https://nssm.cc/) 注册为服务：`nssm install kp-keepalive node server.js`
+
+### 临时后台运行
+
+```bash
+nohup node server.js > run.log 2>&1 &
+```
+
+---
+
+## 6. 反向代理（可选，要公网访问才需要）
+
+### 先用 Nginx 加 HTTPS
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name kp.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/kp.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/kp.example.com/privkey.pem;
+
+    client_max_body_size 8m;
+
+    location / {
+        proxy_pass         http://127.0.0.1:8787;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;   # 保活请求最长约 20s，留足余量
+    }
+}
+
+server {
+    listen 80;
+    server_name kp.example.com;
+    return 301 https://$host$request_uri;
+}
+```
+
+### 安全建议
+
+1. **能不暴露就别暴露**：默认只听 `127.0.0.1`，用 SSH 隧道访问更安全
+   ```bash
+   ssh -L 8787:127.0.0.1:8787 user@服务器
+   ```
+2. 必须公网时：一定上 HTTPS（面板密码与 token 都是明文头传输）
+3. 改掉 `admin/admin888`
+4. 关掉自助注册，或开启「注册审核」
+5. 防火墙只放 443，别放 8787
+
+---
+
+## 7. 接真机（真实保活）
+
+三步，只需要一个 token：
+
+1. 浏览器登录 `cloud.139.com`（短信验证码）
+2. F12 → Console：
+   ```js
+   localStorage.getItem('nToken')
+   ```
+   复制那串 **256 位十六进制**（**不要**拿 `nHwToken`，那是 492 位 JWT）
+3. 面板：「保活设置」→ 接口模式选 **真实** → 账号卡片「编辑」→ 粘贴 token（可选填 `deviceId`，即 `localStorage.uuid`）→ 保存
+4. 点「刷新」同步云机列表 → 点「立即保活」确认返回成功
+
+不想手动取 token：点「139网页登录」，在面板画面里走一遍短信登录，服务端会自动从 `localStorage.nToken` 刮下来回写。
+
+**注意**：`instancePrepareV2` 用 `instanceId`（一串短 ID，与 deviceId 不同），截屏/开关机用 `deviceId`（32 位 hex），两者不同，别混。
+
+---
+
+## 8. 常见问题
+
+| 现象 | 原因 / 处理 |
+|---|---|
+| 打不开页面 | 服务没起：`node server.js`；或端口被占：`PORT=8788 node server.js` |
+| 端口被占用 | Windows `netstat -ano \| findstr 8787` 查 PID；Linux `lsof -i:8787` |
+| 登录提示「用户名或密码错误」 | 默认 `admin/admin888`；改过密码就用新的；忘密码见下 |
+| 忘记管理员密码 | 停服务，把 `data/db.json` 里 `users[0].pass` 替换为 `admin888` 的 sha256：`aaffebecec560fec66e75f24062224ffa4e07696d2ae9a1fee3707c3f8fd9373`，重启 |
+| 页面能开但没数据 | 账号列表本来为空，先在「添加账号」里建一个 |
+| 点「139网页登录」报浏览器不可用 | 本机没装 Edge/Chrome，或 Node < 22；不影响 mock 模式保活 |
+| 真实保活返回失败 | ① token 过期（重新取）；② 实例 ID 写成了 deviceId；③ 手机号未在该实例上；④ 触发了运营商频控（把间隔调回 30 分钟） |
+| 滑块过不去 | 重试即可；`auto-login.js` 按截图估算缺口，偶发偏差属正常 |
+| 时间显示不对 | 依赖系统时区，`tzdata` 或系统时间设置一下 |
+| 数据全没了 | 删过 `data/db.json`；找 `data/db.json.broken.*` 备份 |
+
+---
+
+## 9. 升级
+
+```bash
+cd 项目目录
+git pull            # 代码在 Git 里时
+# 或直接覆盖文件
+node server.js      # 重启生效
+```
+
+`data/` 目录不在版本控制内，升级不会动你的数据。建议升级前先复制一份 `data/db.json`。
+
+---
+
+## 10. 目录结构速查
+
+```
+server.js          # 主程序（全部路由 + 调度器）
+lib/cp139.js       # 真实接口适配器（签名在这里）
+lib/adapter.js     # cURL 回放（接其它运营商用）
+lib/browser.js     # 无头浏览器（登录/截屏/刮 token）
+lib/db.js          # JSON 存储
+public/index.html  # 前端（单文件，无构建）
+data/db.json       # 运行时数据（自动生成）
+start.bat          # Windows 启动
+driver.js          # 常驻浏览器调试工具（抓包用，非必需）
+```
