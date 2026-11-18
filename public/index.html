@@ -1,0 +1,2533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0A0E14" />
+<title>云手机保活 · 控制台</title>
+<style>
+  :root{
+    --bg:#0A0E14;
+    --bg-2:#0D131B;
+    --card:#121A24;
+    --card-2:#171F2C;
+    --line:#253141;
+    --line-soft:#1C2634;
+    --text:#EEF4F9;
+    --text-2:#BBC9D8;
+    --muted:#7D8C9F;
+    --green:#22C55E;
+    --green-deep:#16A34A;
+    --green-soft:rgba(34,197,94,.13);
+    --blue:#3B82F6;
+    --blue-deep:#2563EB;
+    --red:#F2565B;
+    --purple:#8B5CF6;
+    --radius:14px;
+    --shadow:0 8px 28px rgba(0,0,0,.28);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(920px 520px at 50% -12%, rgba(34,197,94,.10), transparent 62%),
+      radial-gradient(680px 420px at 105% 8%, rgba(59,130,246,.07), transparent 60%),
+      radial-gradient(680px 420px at -5% 40%, rgba(139,92,246,.05), transparent 60%),
+      var(--bg);
+    background-attachment:fixed;
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:14px;line-height:1.55;min-height:100vh;-webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:480px;margin:0 auto;padding:0 14px 44px;position:relative}
+  body.locked .app{display:none}
+  svg{display:block}
+  button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit;font-size:14px;transition:all .16s ease}
+  select,input,textarea{font-family:inherit;font-size:14px;color:var(--text);outline:none}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+
+  /* 顶栏 */
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 2px 14px}
+  .brand{display:flex;align-items:center;gap:11px;font-size:16px;font-weight:650;letter-spacing:.2px}
+  .brand > svg{
+    width:36px;height:36px;padding:8px;flex:0 0 auto;border-radius:11px;
+    background:linear-gradient(140deg,#2BD46A,#12924A);
+    box-shadow:0 5px 16px rgba(34,197,94,.32),inset 0 1px 0 rgba(255,255,255,.28);
+    stroke:#fff;fill:none;stroke-width:1.9;
+  }
+  .icon-btn{width:36px;height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:var(--text-2);border:1px solid var(--line-soft);background:rgba(255,255,255,.025)}
+  .icon-btn:active{background:var(--card-2);transform:rotate(30deg)}
+  .icon-btn svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round}
+  .spin{animation:spin .8s linear infinite;transform-origin:50% 50%}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* 标题区 */
+  .headline{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:4px}
+  .headline h1{font-size:23px;line-height:1.25;margin:0;font-weight:760;letter-spacing:.3px}
+  .chip{font-size:11px;color:var(--text-2);border:1px solid var(--line);background:rgba(255,255,255,.03);border-radius:6px;padding:3px 8px;white-space:nowrap}
+  .sub{margin:6px 0 18px;color:var(--muted);font-size:12.5px;letter-spacing:.1px}
+
+  /* 标签切换 */
+  .tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:8px;margin-bottom:16px;padding:5px;background:rgba(255,255,255,.035);border:1px solid var(--line-soft);border-radius:13px}
+  .tab{height:42px;border-radius:9px;border:1px solid transparent;color:var(--muted);font-size:14.5px;font-weight:600}
+  .tab.active{
+    background:linear-gradient(180deg,#28C265,#149A4C);
+    border-color:rgba(45,214,110,.5);color:#fff;font-weight:700;
+    box-shadow:0 4px 14px rgba(34,197,94,.3),inset 0 1px 0 rgba(255,255,255,.2);
+  }
+
+  /* 日志终端 */
+  .term{margin-top:12px;background:#0B1220;border:1px solid #1E2C42;border-radius:12px;padding:13px 13px;max-height:64vh;overflow:auto;font-family:ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;font-size:12px;line-height:1.8;color:#C6D4E6;box-shadow:inset 0 2px 20px rgba(0,0,0,.3)}
+  .term .ln{padding:6px 0;border-bottom:1px dashed #1A2940;white-space:pre-wrap;word-break:break-all}
+  .term .ln:last-child{border-bottom:none}
+  .term .ts{color:#617297}
+  .term .lv-success{color:#34DE84;font-weight:700}
+  .term .lv-info{color:#57A9FF;font-weight:700}
+  .term .lv-error{color:#FF7373;font-weight:700}
+  .term .acc{color:#F0F4FA}
+  .term .plan{color:#93A7C4}
+  .term .msg{color:#C6D4E6}
+
+  /* 统计卡 */
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px}
+  .stat{
+    position:relative;overflow:hidden;
+    background:linear-gradient(160deg,var(--card-2),var(--card));
+    border:1px solid var(--line-soft);border-radius:var(--radius);
+    padding:12px 12px 13px;min-width:0;box-shadow:var(--shadow);
+  }
+  .stat::before{content:'';position:absolute;left:14px;right:14px;top:0;height:2px;border-radius:0 0 3px 3px;background:linear-gradient(90deg,transparent,rgba(34,197,94,.55),transparent);opacity:.7}
+  .stat .k{display:block;color:var(--muted);font-size:11.5px;margin-bottom:4px;font-weight:500}
+  .stat .v{font-size:21px;font-weight:750;letter-spacing:.2px;display:flex;align-items:baseline;gap:5px;white-space:nowrap}
+  .stat .v i{font-style:normal;color:var(--muted);font-size:14px;font-weight:400}
+  .stat .v .ok{color:var(--green)}
+  .stat .v .bad{color:var(--red)}
+  .stat .v b.d2{font-size:17px;font-weight:650}
+
+  /* 操作按钮 */
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+  .btn{
+    height:46px;border-radius:11px;border:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
+    color:var(--text-2);font-size:14.5px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .btn:active{transform:scale(.975);filter:brightness(1.15)}
+  .btn:disabled{opacity:.45;pointer-events:none}
+  .btn.primary{background:linear-gradient(180deg,#2BD466,#159B4E);border-color:rgba(45,214,110,.55);color:#fff;font-weight:700;box-shadow:0 4px 16px rgba(34,197,94,.3),inset 0 1px 0 rgba(255,255,255,.25)}
+  .btn.blue{background:linear-gradient(180deg,#4B93FA,#2461DA);border-color:rgba(75,147,250,.55);color:#fff;font-weight:700;box-shadow:0 4px 16px rgba(59,130,246,.26),inset 0 1px 0 rgba(255,255,255,.22)}
+  .btn.danger{color:#FF8A8E;border-color:rgba(242,86,91,.28);background:rgba(242,86,91,.07)}
+  .autorefresh{text-align:center;color:var(--muted);font-size:11.5px;margin:14px 0 18px;letter-spacing:.3px}
+
+  /* 卡片 */
+  .card{
+    background:linear-gradient(160deg,var(--card-2),var(--card));
+    border:1px solid var(--line-soft);border-radius:16px;padding:16px;margin-bottom:18px;
+    box-shadow:var(--shadow);
+  }
+  .card.watch{border-color:rgba(34,197,94,.28);box-shadow:0 0 0 1px rgba(34,197,94,.08),0 8px 30px rgba(0,0,0,.28),inset 0 0 30px rgba(34,197,94,.04)}
+  .card-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .card-head h2{font-size:17px;margin:0;font-weight:720}
+  .tag{font-size:11px;color:var(--muted);background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+  .tag.live{color:var(--green);border-color:rgba(34,197,94,.35);background:var(--green-soft)}
+  .desc{color:var(--text-2);font-size:12.8px;line-height:1.75;margin:0 0 14px}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .row .label{color:var(--text-2);font-size:13px;flex:0 0 auto}
+  .select{
+    flex:1;min-width:0;height:40px;border-radius:9px;border:1px solid var(--line);
+    background:var(--bg-2) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237D8C9F' stroke-width='2.6'><path d='M6 9l6 6 6-6'/></svg>") no-repeat right 12px center;
+    padding:0 30px 0 12px;color:var(--text);appearance:none;
+  }
+  .select:focus{border-color:rgba(34,197,94,.55)}
+  .btn-sm{height:38px;padding:0 14px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.035);color:var(--text-2);font-size:13px;white-space:nowrap;font-weight:550}
+  .btn-sm:hover{background:rgba(255,255,255,.07);color:var(--text)}
+  .btn-sm:active{background:var(--card-2)}
+
+  /* 账号卡 */
+  .section-title{font-size:12.5px;color:var(--muted);font-weight:600;margin:6px 0 12px;padding-top:16px;border-top:1px solid var(--line-soft);letter-spacing:1px;text-transform:uppercase}
+  .acc{background:linear-gradient(160deg,var(--card-2),var(--card));border:1px solid var(--line-soft);border-radius:15px;padding:15px;margin-bottom:13px;box-shadow:var(--shadow)}
+  .acc.paused{opacity:.5}
+  .acc-title{font-size:16px;font-weight:720;display:flex;align-items:center;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%;background:#485868;flex:0 0 auto}
+  .dot.on{background:var(--green);box-shadow:0 0 0 3px rgba(34,197,94,.16),0 0 10px rgba(34,197,94,.7)}
+  .acc-meta{color:var(--muted);font-size:11.8px;margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .acc-meta b.ok{color:var(--green);font-weight:650}
+  .acc-meta b.bad{color:var(--red);font-weight:650}
+
+  .dev-sum{font-size:11.5px;color:var(--muted);margin-top:11px;padding-left:2px}
+  .dev-sum b{color:var(--text-2)}
+  .dev{background:rgba(255,255,255,.025);border:1px solid var(--line-soft);border-radius:12px;padding:12px;margin-top:11px}
+  .dev-l1{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:13px}
+  .dev-l1 .did{font-weight:720;letter-spacing:.3px}
+  .dev-l1 .muted{color:var(--muted);font-size:11.5px}
+  .chip-g{font-size:10.5px;color:#4FE08A;border:1px solid rgba(34,197,94,.32);background:var(--green-soft);border-radius:5px;padding:2px 6px;white-space:nowrap;font-weight:600}
+  .chip-n{font-size:10.5px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:2px 6px;white-space:nowrap}
+  .chip-r{font-size:10.5px;color:#FF9296;border:1px solid rgba(242,86,91,.32);background:rgba(242,86,91,.1);border-radius:5px;padding:2px 6px;white-space:nowrap;font-weight:600}
+  .dev-status{display:flex;gap:8px;font-size:12px;color:var(--muted);margin-top:9px;line-height:1.6}
+  .dev-status .sk{flex:0 0 auto;color:var(--text-2)}
+  .dev-btns{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+  .dev-btn{height:37px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text-2);font-size:12.5px;font-weight:550}
+  .dev-btn:hover{background:rgba(255,255,255,.08);color:var(--text)}
+  .dev-btn.play{background:linear-gradient(180deg,#28C265,#149A4C);border-color:rgba(45,214,110,.5);color:#fff;font-weight:700;box-shadow:0 3px 12px rgba(34,197,94,.25)}
+  .dev-btn:active{transform:scale(.97);filter:brightness(1.1)}
+  .dev-more{margin-top:9px}
+  .dev-more .dev-btn{width:auto;padding:0 13px;display:inline-flex;align-items:center}
+
+  .acc-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:13px}
+  .acc-actions .btn{height:40px;font-size:13.5px}
+  .watchline{margin-top:12px;font-size:11.8px;color:var(--muted);display:flex;align-items:center;gap:6px;padding-top:11px;border-top:1px dashed var(--line-soft)}
+  .watchline b{color:var(--text-2);font-weight:600}
+  .watchline .link{color:var(--green);margin-left:auto;font-size:12px;font-weight:600}
+  .empty{color:var(--muted);font-size:13px;text-align:center;padding:28px 0;border:1px dashed var(--line);border-radius:13px;background:rgba(255,255,255,.015)}
+
+  /* 弹层 */
+  .mask{position:fixed;inset:0;background:rgba(4,8,13,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:none;align-items:flex-end;justify-content:center;z-index:50}
+  .mask.show{display:flex}
+  .sheet{
+    width:100%;max-width:480px;background:linear-gradient(165deg,#151E2A,#101721);
+    border:1px solid var(--line);border-bottom:0;border-radius:22px 22px 0 0;
+    padding:22px 18px calc(26px + env(safe-area-inset-bottom));
+    animation:up .26s cubic-bezier(.2,.8,.2,1);max-height:90vh;overflow-y:auto;
+    box-shadow:0 -12px 40px rgba(0,0,0,.45);
+  }
+  @keyframes up{from{transform:translateY(40px);opacity:.3}to{transform:none;opacity:1}}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .sheet h3{font-size:18px;margin:0;font-weight:720}
+  .hint{color:var(--muted);font-size:12.5px;margin:0 0 16px;line-height:1.75}
+  .hint.green{color:#7CE7A9;background:var(--green-soft);border:1px solid rgba(34,197,94,.25);border-radius:10px;padding:11px 13px}
+  .hint.green b{color:#A8F2C6}
+  .field{margin-bottom:15px}
+  .field label{display:block;font-size:12.5px;color:var(--text-2);margin-bottom:7px;font-weight:600}
+  .field label em{color:var(--red);font-style:normal}
+  .field input,.field select,.field textarea{width:100%;height:45px;border-radius:10px;border:1px solid var(--line);background:var(--bg-2);padding:0 13px;color:var(--text)}
+  .field textarea{height:auto;padding:11px 13px;line-height:1.5;resize:vertical}
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:rgba(34,197,94,.6);box-shadow:0 0 0 3px rgba(34,197,94,.1)}
+  .field input::placeholder,.field textarea::placeholder{color:#5C6B7D}
+  .field .note{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.55}
+  .field .inline{display:flex;gap:8px}
+  .field .inline input{flex:1}
+  .field .inline button{flex:0 0 auto;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--text-2);font-size:13px;font-weight:600}
+  .field .inline button:hover{background:rgba(255,255,255,.09);color:var(--text)}
+  .sheet-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+  .sheet-actions .btn{height:46px}
+
+  /* 看玩串流层 */
+  .watch-mask{position:fixed;inset:0;background:#05080C;display:none;flex-direction:column;z-index:80}
+  .watch-mask.show{display:flex}
+  .watch-bar{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--card)}
+  .watch-bar .t{font-size:14px;font-weight:650}
+  .watch-bar .close{margin-left:auto;color:var(--text-2);font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:7px 12px;background:rgba(255,255,255,.04)}
+  .view-tabs{display:flex;gap:6px}
+  .view-tabs button{font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text-2);white-space:nowrap}
+  .view-tabs button.on{background:linear-gradient(180deg,#149A4C,#0E7A3C);border-color:rgba(45,214,110,.5);color:#fff;font-weight:650}
+  .watch-stage{flex:1;position:relative;overflow:hidden;background:#000;min-height:0;touch-action:none}
+  #screenImg{width:100%;height:100%;object-fit:contain;display:none;user-select:none;-webkit-user-select:none;pointer-events:none}
+  .screen-loading{position:absolute;inset:0;background:radial-gradient(circle at 50% 40%,#0F1A26,#070B10);z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;color:var(--text-2);font-size:13px;padding:0 24px;text-align:center;line-height:1.7}
+  .spinner{width:36px;height:36px;border:3px solid var(--line);border-top-color:var(--green);border-radius:50%;animation:spin 1s linear infinite}
+  .autobar{display:none}
+  .watch-status{padding:5px 14px 0;font-size:12px;color:#E9B85C;min-height:20px;line-height:1.5}
+  .ctrl{background:var(--card);border-top:1px solid var(--line);padding:11px 12px calc(13px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:9px}
+  .send-row{display:flex;gap:8px}
+  .send-row input{flex:1;min-width:0;height:42px;border-radius:9px;border:1px solid var(--line);background:var(--bg-2);padding:0 12px;font-size:13px}
+  .send-btn{flex:0 0 auto;width:88px;height:42px;border-radius:9px;background:linear-gradient(180deg,#28C265,#149A4C);color:#fff;font-weight:700;font-size:14px;box-shadow:0 3px 12px rgba(34,197,94,.25)}
+  .tri{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px}
+  .tri button{height:42px;border-radius:9px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text-2);font-size:12.5px;white-space:nowrap;padding:0 4px}
+  .tri button.hl{border-color:rgba(34,197,94,.35);color:var(--green);background:var(--green-soft);font-weight:600}
+  .tri button:active,.send-btn:active,.finish:active{transform:scale(.97);filter:brightness(1.12)}
+  .finish{width:100%;height:44px;border-radius:9px;background:linear-gradient(180deg,#28C265,#149A4C);color:#fff;font-size:15px;font-weight:720;box-shadow:0 4px 14px rgba(34,197,94,.25)}
+  .finish.sitelink{display:flex;align-items:center;justify-content:center;text-decoration:none;background:linear-gradient(180deg,#4B93FA,#2461DA);border:1px solid rgba(75,147,250,.5);margin-top:10px}
+  .login-tabs{display:flex;gap:6px;margin:2px 0 13px}
+  .login-tabs .ltab{flex:1;text-align:center;font-size:12.5px;padding:9px 4px;border-radius:9px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+  .login-tabs .ltab.on{border-color:rgba(34,197,94,.35);color:var(--green);background:var(--green-soft);font-weight:650}
+  .login-tabs .ltab em{font-style:normal;font-size:11px}
+  .login-msg{min-height:18px;font-size:12.5px;line-height:1.5;margin:2px 0 8px}
+  .login-msg.ok{color:#4FE08A}
+  .login-msg.bad{color:#FF9296}
+  .login-msg.info{color:#E9B85C}
+  /* 添加账号：步骤条 + 登录页关键帧 */
+  .steps{display:flex;gap:6px;margin:0 0 15px;font-size:11.5px;color:var(--muted)}
+  .steps span{flex:1;text-align:center;padding:7px 2px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.025);white-space:nowrap;transition:.15s}
+  .steps span.on{color:#fff;background:linear-gradient(180deg,#149A4C,#0E7A3C);border-color:rgba(45,214,110,.5);font-weight:650}
+  .steps span.done{color:#4FE08A;border-color:rgba(34,197,94,.35);background:var(--green-soft)}
+  .snap-box{display:none;margin:4px 0 12px;border-radius:11px;border:1px solid var(--line);background:#000;overflow:hidden}
+  .snap-box img{width:100%;display:block;min-height:80px;object-fit:contain}
+  #addCodeWrap .inline button:disabled{opacity:.5}
+  .ctrl-hint{text-align:center;font-size:11.5px;color:var(--muted)}
+  .ctrl-sub{text-align:center;font-size:10.5px;color:#637486;line-height:1.55}
+
+  .toast{position:fixed;left:50%;bottom:88px;transform:translate(-50%,10px);background:#182431;border:1px solid var(--line);color:var(--text);padding:10px 18px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:.22s;z-index:99;max-width:88vw;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+
+  /* ===== 登录页（浅色 · 现代磨砂质感） ===== */
+  .login-mask{
+    position:fixed;inset:0;
+    background:
+      radial-gradient(900px 520px at 15% 8%, rgba(59,130,246,.28), transparent 55%),
+      radial-gradient(760px 560px at 90% 92%, rgba(139,92,246,.24), transparent 58%),
+      linear-gradient(155deg,#EAF0F9 0%,#DCE5F2 48%,#CBD7EA 100%);
+    display:none;align-items:flex-start;justify-content:center;z-index:120;overflow:auto;padding:8vh 16px 40px;
+  }
+  .login-mask.show{display:flex}
+  .login-card{
+    width:min(400px,94vw);background:rgba(255,255,255,.86);
+    -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+    border:1px solid rgba(255,255,255,.9);
+    border-radius:22px;padding:32px 26px 26px;
+    box-shadow:0 24px 70px rgba(30,50,90,.2),inset 0 1px 0 rgba(255,255,255,.9);
+    animation:cardIn .4s cubic-bezier(.2,.8,.2,1);
+  }
+  @keyframes cardIn{from{transform:translateY(18px);opacity:0}to{transform:none;opacity:1}}
+  .login-logo{
+    width:74px;height:74px;margin:0 auto 17px;border-radius:21px;
+    background:linear-gradient(145deg,#FF6A5B,#E5312A);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 12px 28px rgba(229,49,42,.35),inset 0 2px 0 rgba(255,255,255,.3);
+  }
+  .login-logo svg{width:38px;height:38px;stroke:#fff;fill:none;stroke-width:1.9}
+  .login-card h1{text-align:center;font-size:21px;color:#141B2A;letter-spacing:.5px;font-weight:750}
+  .login-card .lsub{text-align:center;font-size:12.5px;color:#7C879C;margin:6px 0 20px}
+  .lfield{margin-bottom:14px}
+  .lfield label{display:block;font-size:12.5px;color:#4A5568;font-weight:700;margin-bottom:7px}
+  .lfield input{width:100%;height:47px;border-radius:11px;border:1px solid #DCE3EE;background:#fff;padding:0 14px;font-size:14px;color:#141B2A;box-shadow:inset 0 1px 2px rgba(20,30,50,.03)}
+  .lfield input::placeholder{color:#AAB4C4}
+  .lfield input:focus{outline:none;border-color:#E5312A;box-shadow:0 0 0 3px rgba(229,49,42,.12)}
+  .lbtn{width:100%;height:49px;border-radius:11px;background:linear-gradient(135deg,#FB5B4C,#DC2A23);color:#fff;font-size:15.5px;font-weight:750;letter-spacing:.5px;box-shadow:0 8px 20px rgba(220,42,35,.32),inset 0 1px 0 rgba(255,255,255,.25)}
+  .lbtn:hover{filter:brightness(1.05)}
+  .lbtn:active{transform:scale(.985);filter:brightness(1.02)}
+  .lerr{min-height:20px;font-size:12.5px;color:#E2445C;text-align:center;margin-top:10px}
+  .ltabs{display:flex;justify-content:center;gap:38px;margin:0 0 18px}
+  .ltabs span{font-size:15px;color:#8A94A6;padding-bottom:8px;border-bottom:2px solid transparent;cursor:pointer;user-select:none;font-weight:600;transition:.18s}
+  .ltabs span.on{color:#E5312A;font-weight:750;border-bottom-color:#E5312A}
+  /* 小屏/矮视口：压缩登录卡片，保证一屏可见 */
+  @media (max-height: 760px) {
+    .login-mask{padding:3vh 16px 16px}
+    .login-card{padding:20px 22px 17px;border-radius:18px}
+    .login-logo{width:56px;height:56px;margin:0 auto 11px;border-radius:15px}
+    .login-logo svg{width:28px;height:28px}
+    .login-card h1{font-size:17px}
+    .login-card .lsub{font-size:11px;margin:4px 0 13px}
+    .ltabs{margin:0 0 11px;gap:28px}
+    .ltabs span{font-size:13px;padding-bottom:5px}
+    .lfield{margin-bottom:10px}
+    .lfield label{font-size:12px;margin-bottom:4px}
+    .lfield input{height:41px;font-size:13.5px}
+    .lbtn{height:43px;font-size:14px}
+    .lerr{min-height:14px;margin-top:5px;font-size:11.5px}
+  }
+
+  /* 用户管理弹窗 */
+  .uitem{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:11px 4px;border-bottom:1px dashed var(--line);font-size:13px}
+  .uitem:last-child{border-bottom:none}
+  .uitem .un{font-weight:700;min-width:0;max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+  .uitem .meta{color:var(--muted);font-size:11px}
+  .uitem .chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:11px;white-space:nowrap;background:rgba(255,255,255,.025)}
+  .uitem .chip b{color:var(--green);font-weight:700;font-variant-numeric:tabular-nums}
+  .uitem .btn-sm{margin-left:0;flex-shrink:0}
+  .uitem .grow{flex:1;min-width:0}
+  .uitem .sp{flex:1}
+
+  /* ============ 气泡按钮：统一覆盖层 ============
+     设计语言：全圆角胶囊 + 顶部内高光 + 底部内阴影 + 外发光
+     只作用于按钮类，不影响任何布局 / 功能 / 数据结构 */
+  button, .btn, .btn-sm, .tab, .dev-btn, .lbtn, .icon-btn,
+  .send-btn, .finish, .tri button, .view-tabs button, .ltab,
+  .steps span, .field .inline button, .watch-bar .close,
+  .sheet-head button, .uitem .btn-sm {
+    border-radius:999px !important;
+  }
+
+  /* 通用按钮基底：立体气泡质感 */
+  .btn{
+    height:46px;
+    background:linear-gradient(180deg,#2E3B4C 0%,#212C3B 100%) !important;
+    border:1px solid rgba(255,255,255,.10) !important;
+    color:var(--text-2) !important;
+    font-weight:600 !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.16),inset 0 -2px 5px rgba(0,0,0,.30),0 4px 12px rgba(0,0,0,.28) !important;
+  }
+  .btn:active{transform:translateY(1px) scale(.97);box-shadow:inset 0 2px 6px rgba(0,0,0,.4) !important}
+
+  /* 主按钮：绿色气泡 */
+  .btn.primary{
+    background:linear-gradient(180deg,#54E58C 0%,#12A04C 60%,#0E8C42 100%) !important;
+    border:1px solid rgba(160,255,200,.55) !important;
+    color:#fff !important;
+    font-weight:750 !important;
+    text-shadow:0 1px 1px rgba(0,80,35,.35);
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.55),inset 0 -3px 8px rgba(0,70,30,.35),0 6px 18px rgba(34,197,94,.42),0 0 0 3px rgba(34,197,94,.08) !important;
+  }
+  .btn.primary:active{box-shadow:inset 0 2px 8px rgba(0,70,30,.5),0 2px 8px rgba(34,197,94,.3) !important}
+
+  /* 蓝色气泡 */
+  .btn.blue{
+    background:linear-gradient(180deg,#69B0FF 0%,#2563EB 60%,#1D4FCB 100%) !important;
+    border:1px solid rgba(180,220,255,.55) !important;
+    color:#fff !important;
+    font-weight:750 !important;
+    text-shadow:0 1px 1px rgba(0,40,120,.35);
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.5),inset 0 -3px 8px rgba(0,35,110,.35),0 6px 18px rgba(59,130,246,.42),0 0 0 3px rgba(59,130,246,.08) !important;
+  }
+
+  /* 危险气泡 */
+  .btn.danger{
+    background:linear-gradient(180deg,#FF8A8E 0%,#E23A40 60%,#C62A30 100%) !important;
+    border:1px solid rgba(255,190,190,.5) !important;
+    color:#fff !important;
+    font-weight:700 !important;
+    text-shadow:0 1px 1px rgba(120,0,0,.3);
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.45),inset 0 -3px 8px rgba(120,0,0,.3),0 6px 16px rgba(242,86,91,.35) !important;
+  }
+
+  /* 小按钮气泡 */
+  .btn-sm{
+    background:linear-gradient(180deg,#2E3B4C,#212C3B) !important;
+    border:1px solid rgba(255,255,255,.1) !important;
+    color:var(--text-2) !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 -2px 4px rgba(0,0,0,.28),0 3px 8px rgba(0,0,0,.24) !important;
+  }
+  .btn-sm:hover{color:#fff !important;filter:brightness(1.1)}
+
+  /* 登录页大按钮：红色气泡 */
+  .lbtn{
+    background:linear-gradient(180deg,#FF7B6C 0%,#E5342B 60%,#CC251F 100%) !important;
+    border:1px solid rgba(255,200,190,.6) !important;
+    color:#fff !important;
+    font-weight:780 !important;
+    letter-spacing:.5px;
+    text-shadow:0 1px 2px rgba(130,10,5,.4);
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.5),inset 0 -4px 10px rgba(130,10,5,.35),0 10px 24px rgba(220,42,35,.42),0 0 0 4px rgba(229,49,42,.09) !important;
+  }
+  .lbtn:active{transform:translateY(1px) scale(.98) !important}
+
+  /* 标签切换气泡 */
+  .tab{height:44px;font-weight:600 !important}
+  .tab.active{
+    background:linear-gradient(180deg,#54E58C,#12A04C 65%,#0E8C42) !important;
+    border:1px solid rgba(160,255,200,.5) !important;
+    color:#fff !important;
+    text-shadow:0 1px 1px rgba(0,80,35,.3);
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.5),inset 0 -3px 7px rgba(0,70,30,.3),0 5px 16px rgba(34,197,94,.42) !important;
+  }
+
+  /* 设备控制按钮气泡 */
+  .dev-btn{
+    background:linear-gradient(180deg,#2E3B4C,#212C3B) !important;
+    border:1px solid rgba(255,255,255,.1) !important;
+    color:var(--text-2) !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 -2px 4px rgba(0,0,0,.28),0 3px 8px rgba(0,0,0,.24) !important;
+  }
+  .dev-btn:active{transform:translateY(1px) scale(.96)}
+  .dev-btn.play{
+    background:linear-gradient(180deg,#54E58C,#12A04C 65%,#0E8C42) !important;
+    border:1px solid rgba(160,255,200,.5) !important;
+    color:#fff !important;
+    text-shadow:0 1px 1px rgba(0,80,35,.3);
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.5),inset 0 -3px 7px rgba(0,70,30,.3),0 5px 14px rgba(34,197,94,.4) !important;
+  }
+
+  /* 图标圆按钮气泡 */
+  .icon-btn{
+    width:38px;height:38px;
+    background:linear-gradient(180deg,#2E3B4C,#212C3B) !important;
+    border:1px solid rgba(255,255,255,.1) !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.16),inset 0 -2px 4px rgba(0,0,0,.28),0 4px 10px rgba(0,0,0,.26) !important;
+  }
+
+  /* 内联 / 三联 / 发送 / 完成 / 视图切换 按钮气泡 */
+  .field .inline button,.tri button,.view-tabs button,.login-tabs .ltab,.watch-bar .close{
+    background:linear-gradient(180deg,#2E3B4C,#212C3B) !important;
+    border:1px solid rgba(255,255,255,.1) !important;
+    color:var(--text-2) !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 -2px 4px rgba(0,0,0,.26),0 3px 8px rgba(0,0,0,.22) !important;
+  }
+  .tri button.hl{
+    background:linear-gradient(180deg,#34CE74,#119348) !important;
+    color:#fff !important;border-color:rgba(160,255,200,.45) !important;
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.4),inset 0 -3px 7px rgba(0,70,30,.3),0 4px 12px rgba(34,197,94,.35) !important;
+  }
+  .send-btn,.finish{
+    background:linear-gradient(180deg,#54E58C,#12A04C 65%,#0E8C42) !important;
+    border:1px solid rgba(160,255,200,.5) !important;
+    color:#fff !important;font-weight:750 !important;
+    text-shadow:0 1px 1px rgba(0,80,35,.3);
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.5),inset 0 -3px 8px rgba(0,70,30,.32),0 6px 16px rgba(34,197,94,.4) !important;
+  }
+  .finish.sitelink{background:linear-gradient(180deg,#69B0FF,#2563EB 65%,#1D4FCB) !important;border-color:rgba(180,220,255,.5) !important}
+  .view-tabs button.on,.login-tabs .ltab.on{
+    background:linear-gradient(180deg,#34CE74,#119348) !important;
+    color:#fff !important;border-color:rgba(160,255,200,.45) !important;
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.4),0 4px 12px rgba(34,197,94,.3) !important;
+  }
+
+  /* 步骤条气泡 */
+  .steps span{
+    background:linear-gradient(180deg,#2E3B4C,#212C3B) !important;
+    border:1px solid rgba(255,255,255,.09) !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 2px 6px rgba(0,0,0,.2) !important;
+  }
+  .steps span.on{
+    background:linear-gradient(180deg,#34CE74,#119348) !important;
+    color:#fff !important;border-color:rgba(160,255,200,.45) !important;
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.4),0 4px 12px rgba(34,197,94,.3) !important;
+  }
+  .steps span.done{background:var(--green-soft) !important;color:#4FE08A !important}
+
+  /* 统计卡也换成更饱满的气泡卡片 */
+  .stat{
+    border-radius:18px !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 8px 24px rgba(0,0,0,.3) !important;
+  }
+
+  /* ============ 主色调：绿 → 红（仅覆盖主操作/选中态，状态绿保留） ============
+     红色主色系（鲜红偏橙，与登录按钮统一）：亮 #FF6B5A / 主 #F0442E / 暗 #D52E1A
+     保留绿色：成功数 .ok、状态点 .dot.on、运行中 .tag.live、会话就绪 .chip-g、提示 .hint.green */
+  .btn.primary{
+    background:linear-gradient(180deg,#FF6B5A 0%,#F0442E 60%,#D52E1A 100%) !important;
+    border:1px solid rgba(255,180,165,.6) !important;
+    color:#fff !important;
+    text-shadow:0 1px 1px rgba(130,20,10,.35);
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.55),inset 0 -3px 8px rgba(120,20,8,.35),0 6px 18px rgba(240,68,46,.42),0 0 0 3px rgba(240,68,46,.08) !important;
+  }
+  .btn.primary:active{box-shadow:inset 0 2px 8px rgba(120,20,8,.5),0 2px 8px rgba(240,68,46,.3) !important}
+
+  .tab.active{
+    background:linear-gradient(180deg,#FF6B5A,#F0442E 65%,#D52E1A) !important;
+    border:1px solid rgba(255,180,165,.55) !important;
+    color:#fff !important;
+    text-shadow:0 1px 1px rgba(130,20,10,.3);
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.5),inset 0 -3px 7px rgba(120,20,8,.3),0 5px 16px rgba(240,68,46,.42) !important;
+  }
+
+  .dev-btn.play{
+    background:linear-gradient(180deg,#FF6B5A,#F0442E 65%,#D52E1A) !important;
+    border:1px solid rgba(255,180,165,.55) !important;
+    color:#fff !important;
+    text-shadow:0 1px 1px rgba(130,20,10,.3);
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.5),inset 0 -3px 7px rgba(120,20,8,.3),0 5px 14px rgba(240,68,46,.4) !important;
+  }
+
+  .send-btn,.finish{
+    background:linear-gradient(180deg,#FF6B5A,#F0442E 65%,#D52E1A) !important;
+    border:1px solid rgba(255,180,165,.55) !important;
+    color:#fff !important;font-weight:750 !important;
+    text-shadow:0 1px 1px rgba(130,20,10,.3);
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.5),inset 0 -3px 8px rgba(120,20,8,.32),0 6px 16px rgba(240,68,46,.4) !important;
+  }
+
+  .tri button.hl{
+    background:linear-gradient(180deg,#F56B5B,#E1402C) !important;
+    color:#fff !important;border-color:rgba(255,180,165,.5) !important;
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.4),inset 0 -3px 7px rgba(120,20,8,.3),0 4px 12px rgba(240,68,46,.35) !important;
+  }
+
+  .steps span.on{
+    background:linear-gradient(180deg,#F56B5B,#E1402C) !important;
+    color:#fff !important;border-color:rgba(255,180,165,.5) !important;
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.4),0 4px 12px rgba(240,68,46,.3) !important;
+  }
+
+  .view-tabs button.on,.login-tabs .ltab.on{
+    background:linear-gradient(180deg,#F56B5B,#E1402C) !important;
+    color:#fff !important;border-color:rgba(255,180,165,.5) !important;
+    box-shadow:inset 0 1.5px 0 rgba(255,255,255,.4),0 4px 12px rgba(240,68,46,.3) !important;
+  }
+
+  /* 顶栏 logo 也换成红色，与整体配色呼应 */
+  .brand > svg{
+    background:linear-gradient(140deg,#FF7A6A,#D9301C) !important;
+    box-shadow:0 5px 16px rgba(240,68,46,.34),inset 0 1px 0 rgba(255,255,255,.28) !important;
+  }
+
+  /* ============ 客户端欢迎条：蓝紫 → 红紫渐变（与主色呼应） ============ */
+  #welcomeBar{
+    background:linear-gradient(120deg,#EF4130 0%,#E0347A 52%,#9B3FC4 100%) !important;
+    border-radius:16px !important;
+    padding:16px 16px !important;
+    box-shadow:0 8px 24px rgba(220,52,90,.3),inset 0 1px 0 rgba(255,255,255,.2) !important;
+  }
+  #welcomeBar > div:first-child{
+    background:rgba(255,255,255,.24) !important;
+  }
+
+  /* ============ 管理员控制台对齐参考图：退出登录改红色描边风格 ============ */
+  #btnLogout.btn.danger,
+  .btn.danger{
+    background:linear-gradient(180deg,rgba(242,86,91,.06),rgba(242,86,91,.03)) !important;
+    border:1px solid rgba(242,86,91,.5) !important;
+    color:#FF8489 !important;
+    font-weight:650 !important;
+    text-shadow:none !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 3px 8px rgba(0,0,0,.2) !important;
+  }
+  .btn.danger:active{box-shadow:inset 0 2px 6px rgba(242,86,91,.15) !important}
+
+  /* ============ 结果/输入弹窗：居中气泡卡片 ============ */
+  .center-mask{align-items:center !important;padding:20px}
+  .result-card{
+    width:min(340px,92vw);
+    background:linear-gradient(165deg,#182231,#111925);
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:22px;
+    padding:26px 22px 22px;
+    text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08);
+    animation:cardIn .28s cubic-bezier(.2,.8,.2,1);
+  }
+  .result-icon{
+    width:64px;height:64px;margin:0 auto 14px;border-radius:50%;
+    background:linear-gradient(180deg,#54E58C,#12A04C 65%,#0E8C42);
+    color:#fff;font-size:34px;font-weight:800;line-height:64px;
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.5),inset 0 -4px 8px rgba(0,70,30,.35),0 8px 22px rgba(34,197,94,.45),0 0 0 5px rgba(34,197,94,.1);
+  }
+  .result-icon.fail{background:linear-gradient(180deg,#FF8A8E,#E23A40 65%,#C62A30);box-shadow:inset 0 2px 0 rgba(255,255,255,.45),inset 0 -4px 8px rgba(120,0,0,.3),0 8px 22px rgba(242,86,91,.4),0 0 0 5px rgba(242,86,91,.1)}
+  .result-card h3{font-size:19px;margin:0 0 10px;font-weight:720;color:var(--text)}
+  .result-body{font-size:13.5px;color:var(--text-2);line-height:1.8;margin-bottom:20px}
+  .result-body b{color:var(--text);font-weight:700}
+  .result-body .expire{display:inline-block;margin-top:6px;padding:6px 12px;border-radius:9px;background:var(--green-soft);border:1px solid rgba(34,197,94,.25);color:#7CE7A9;font-weight:600}
+  .result-card > .btn{height:46px;width:100%}
+  .days-card h3{margin-bottom:6px}
+  .days-card .field input{height:46px}
+</style>
+</head>
+<body class="locked">
+<!-- 登录页 -->
+<div class="login-mask" id="loginMask">
+  <div class="login-card">
+    <div class="login-logo"><svg viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3" stroke-linecap="round"/></svg></div>
+    <h1>移动云手机控制台</h1>
+    <div class="lsub">24小时信令脉冲防休眠 · 多用户托管</div>
+    <div class="ltabs"><span class="on" id="ltabLogin">用户登录</span><span id="ltabReg">注册账号</span></div>
+    <div id="lLogin">
+      <div class="lfield"><label>用户名</label><input id="lUser" autocomplete="username" placeholder="请输入用户名" /></div>
+      <div class="lfield"><label>密码</label><input id="lPass" type="password" autocomplete="current-password" placeholder="请输入登录密码" /></div>
+      <button class="lbtn" id="btnDoLogin">登录控制台</button>
+      <div class="lerr" id="lErr"></div>
+    </div>
+    <div id="lReg" style="display:none">
+      <div class="lfield"><label>注册用户名</label><input id="rUser" autocomplete="username" placeholder="字母或数字" /></div>
+      <div class="lfield"><label>设置密码</label><input id="rPass" type="password" autocomplete="new-password" placeholder="至少4位密码" /></div>
+      <button class="lbtn" id="btnDoReg">立即注册</button>
+      <div class="lerr" id="rErr"></div>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5.6c0 4.2-2.9 7.8-7 9.4-4.1-1.6-7-5.2-7-9.4V6l7-3z" stroke-linejoin="round"/><path d="M8.9 12.1l2.2 2.2 4.1-4.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      云手机保活 · 控制台
+    </div>
+    <button class="icon-btn" id="btnRefreshTop" aria-label="刷新">
+      <svg viewBox="0 0 24 24"><path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/><path d="M20.5 4v6h-6" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+
+  <div class="headline">
+    <h1>云手机保活 · 控制台</h1>
+    <span class="chip" id="chipTitle">移动云手机</span>
+  </div>
+  <p class="sub" id="subLine">—</p>
+
+  <!-- 客户欢迎条 -->
+  <div id="welcomeBar" style="display:none;margin:12px 0;padding:14px 16px;border-radius:12px;background:linear-gradient(135deg,#2E80F7,#7B4DF7);color:#fff">
+    <div style="font-size:11px;opacity:.85;background:rgba(255,255,255,.22);display:inline-block;padding:2px 9px;border-radius:999px">智能防休眠保活中</div>
+    <div style="font-size:18px;font-weight:800;margin:7px 0 3px">欢迎，<span id="wlName"></span></div>
+    <div style="font-size:12.5px;opacity:.92">保活配额: <b id="wlQuota">—</b> · 账户有效期: <b id="wlExpire">—</b></div>
+    <div id="wlMachines" style="display:none;margin-top:9px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none"></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-product="phone">云手机</button>
+    <button class="tab" data-product="pc">爱家云电脑</button>
+    <button class="tab" data-product="logs" id="tabLogs" style="display:none">日志</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><span class="k">账号</span><span class="v"><b class="num" id="sAccOn">0</b><i>/</i><b class="num d2" id="sAccAll">0</b></span></div>
+    <div class="stat"><span class="k" id="sDevLabel">云手机</span><span class="v"><b class="num" id="sDev">0</b></span></div>
+    <div class="stat"><span class="k">成功 / 失败</span><span class="v"><b class="ok num" id="sOk">0</b><i>/</i><b class="bad num" id="sFail" style="color:var(--text-2)">0</b></span></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><span class="k">已执行轮次</span><span class="v"><b class="num" id="sRounds">0</b></span></div>
+    <div class="stat"><span class="k">上一轮</span><span class="v"><b class="num d2" id="sLast">—</b></span></div>
+    <div class="stat"><span class="k">下一轮</span><span class="v"><b class="num d2" id="sNext">—</b></span></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn primary" id="btnLogin1">＋ 添加账号</button>
+    <button class="btn blue" id="btnWeb139">139网页登录</button>
+    <button class="btn blue" id="btnLogin">短信登录</button>
+    <button class="btn" id="btnSettings" style="display:none">保活设置</button>
+    <button class="btn" id="btnUsers" style="display:none">👥 用户管理</button>
+    <button class="btn" id="btnPasswd" style="display:none">🔑 管理员账号</button>
+    <button class="btn" id="btnRefresh">刷新</button>
+    <button class="btn danger" id="btnLogout">退出登录</button>
+  </div>
+  <p class="autorefresh">自动刷新 · <span class="num" id="autoLeft">20</span> 秒</p>
+
+  <section class="card watch">
+    <div class="card-head">
+      <h2>看玩保活</h2>
+      <span class="tag" id="watchTag">加载中…</span>
+    </div>
+    <p class="desc">到点自动在后台打开云手机挂机，不弹窗口、不用你操作；每台机器的开关和周期在各账号卡片里。想让云手机里的应用不掉后台，把模式切成「常驻」</p>
+    <div class="row">
+      <span class="label">模式</span>
+      <select class="select" id="watchMode">
+        <option value="resident">常驻（不关，一直挂着）</option>
+        <option value="scheduled">定时（按周期开一次）</option>
+        <option value="off">关闭</option>
+      </select>
+      <button class="btn-sm" id="btnWatchRefresh">刷新状态</button>
+    </div>
+  </section>
+
+  <div class="section-title">账号</div>
+  <div id="accList"></div>
+
+  <!-- 日志控制台（终端风格） -->
+  <section class="card" id="logsView" style="display:none">
+    <div class="card-head">
+      <h2>&gt;_ 实时保活与脉冲日志控制台</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn-sm" id="btnLogClear">🗑 清空屏幕</button>
+        <button class="btn-sm" id="btnLogRefresh">🔄 刷新</button>
+      </div>
+    </div>
+    <div class="term" id="termBox"></div>
+  </section>
+</div>
+
+<!-- 编辑账号 -->
+<div class="mask" id="maskEdit">
+  <div class="sheet">
+    <div class="sheet-head"><h3>编辑账号</h3><button class="btn-sm" data-close="#maskEdit">关闭</button></div>
+    <div class="field"><label>账号名称</label><input id="editTitle" /></div>
+    <div class="field"><label>手机号</label><input id="editPhone" inputmode="numeric" /></div>
+    <div class="field"><label>备注</label><input id="editNote" /></div>
+    <div class="field">
+      <label>看玩保活</label>
+      <select id="editWatch">
+        <option value="off">未启用</option>
+        <option value="resident">常驻（不关，一直挂着）</option>
+        <option value="scheduled">定时（按周期开一次）</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>登录态 Token（cloud.139.com 的 nToken）</label>
+      <input id="editCpToken" placeholder="留空不修改；粘贴后立即生效" style="font-size:12px" />
+      <div class="note">电脑/手机浏览器登录 cloud.139.com → F12 或地址栏 javascript:alert(localStorage.nToken) → 复制 token 粘到这里</div>
+    </div>
+    <div class="field">
+      <label>设备指纹 deviceid（可选）</label>
+      <input id="editCpFp" placeholder="留空不修改；抓包请求头 deviceid 的值" style="font-size:12px" />
+    </div>
+    <div class="sheet-actions">
+      <button class="btn" data-close="#maskEdit">取消</button>
+      <button class="btn primary" id="btnEditSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 139网页登录（画面里手动登录，token 自动回写） -->
+<div class="mask" id="maskWeb139">
+  <div class="sheet">
+    <div class="sheet-head"><h3>139网页登录</h3><button class="btn-sm" data-close="#maskWeb139">关闭</button></div>
+    <p class="hint green">给这个账号起个名字（备注），点「创建并打开」后直接进入 139 官网登录页，在画面里短信登录即可，<b>登录成功后 token 自动回写面板</b>。</p>
+    <div class="field">
+      <label>账号名称</label>
+      <input id="web139Name" placeholder="自己填写备注，例如：张三-华为机" />
+    </div>
+    <p class="hint">留空则自动命名为「139登录-月-日-时分」</p>
+    <div class="sheet-actions">
+      <button class="btn" data-close="#maskWeb139">取消</button>
+      <button class="btn primary" id="btnWeb139Go">创建并打开 139 登录页</button>
+    </div>
+  </div>
+</div>
+
+<!-- 短信登录 -->
+<div class="mask" id="maskLogin">
+  <div class="sheet">
+    <div class="sheet-head"><h3>添加绑定云手机</h3><button class="btn-sm" data-close="#maskLogin">关闭</button></div>
+    <div class="login-tabs">
+      <span class="ltab on">💬 短信验证码一键登录 <em>（推荐）</em></span>
+      <span class="ltab">🔑 手动凭据导入</span>
+    </div>
+    <div class="field">
+      <label>中国移动手机号</label>
+      <input id="loginPhone" inputmode="numeric" placeholder="11 位手机号" />
+    </div>
+    <div class="field">
+      <label>短信验证码</label>
+      <div class="inline">
+        <input id="loginCode" inputmode="numeric" maxlength="6" placeholder="请输入 6 位短信验证码" />
+        <button id="btnSendCode">获取验证码</button>
+      </div>
+    </div>
+    <div class="login-msg" id="loginMsg"></div>
+    <div class="sheet-actions">
+      <button class="btn" data-close="#maskLogin">取消</button>
+      <button class="btn primary" id="btnLoginSubmit">登录并自动发现云手机</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加账号（登录即添加：面板内短信登录，token 自动回写） -->
+<div class="mask" id="maskAdd">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h3>添加账号</h3>
+      <button class="btn-sm" data-close="#maskAdd">关闭</button>
+    </div>
+    <p class="hint green">填手机号 → 点「登录并添加」打开 139 登录页 → 点「发送验证码」→ 输入验证码后点「确认登录」。<b>全程不用进画面</b>，登录成功后 token 自动回写面板，<b>保活与看玩共用同一份会话</b>。</p>
+    <div class="steps" id="addSteps">
+      <span data-step="1">① 打开登录页</span>
+      <span data-step="2">② 发送验证码</span>
+      <span data-step="3">③ 登录完成</span>
+    </div>
+    <div class="field">
+      <label>手机号 <em>*</em></label>
+      <input id="addPhone" inputmode="numeric" maxlength="11" placeholder="11 位手机号" />
+      <div class="note">139 云手机账号的手机号，用于接收登录短信</div>
+    </div>
+    <div class="field">
+      <label>账号名称</label>
+      <input id="addTitle" placeholder="可选，默认用手机号" />
+    </div>
+    <div class="field" id="addCodeWrap" style="display:none">
+      <label>短信验证码 <em>*</em></label>
+      <div class="inline">
+        <input id="addCode" inputmode="numeric" maxlength="6" placeholder="6 位验证码" />
+        <button id="btnAddSend" type="button">发送验证码</button>
+      </div>
+    </div>
+    <div class="snap-box" id="addSnapBox">
+      <img id="addSnap" alt="" />
+    </div>
+    <div class="login-msg" id="addMsg"></div>
+    <div class="sheet-actions">
+      <button class="btn" data-close="#maskAdd">取消</button>
+      <button class="btn primary" id="btnAddSubmit">登录并添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 保活设置 -->
+<div class="mask" id="maskSettings">
+  <div class="sheet">
+    <div class="sheet-head"><h3>保活设置</h3><button class="btn-sm" data-close="#maskSettings">关闭</button></div>
+    <p class="hint">间隔太短容易触发运营商风控，建议不低于 10 分钟。</p>
+    <div class="field">
+      <label>接口模式</label>
+      <select id="setApiMode">
+        <option value="mock">模拟（本地演示）</option>
+        <option value="real">真实（直连移动云手机协议）</option>
+      </select>
+      <div class="note" id="apiModeNote"></div>
+    </div>
+    <div class="field"><label>保活间隔（分钟）</label><input id="setInterval" inputmode="numeric" /></div>
+    <div class="field"><label>页面自动刷新（秒）</label><input id="setRefresh" inputmode="numeric" /></div>
+    <div class="field">
+      <label>看玩模式</label>
+      <select id="setWatch">
+        <option value="resident">常驻（不关，一直挂着）</option>
+        <option value="scheduled">定时（按周期开一次）</option>
+        <option value="off">关闭</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>注册审核</label>
+      <select id="setRegReview">
+        <option value="0">关闭（用户注册即可用 2 天）</option>
+        <option value="1">开启（注册后需我审核通过才能登录）</option>
+      </select>
+      <div class="note">防白嫖最稳的一招：开启后每个新注册账号都要你在「用户管理」点「通过审核」，有效期从通过那一刻算 2 天。</div>
+    </div>
+
+    <div style="border-top:1px solid var(--line);margin:18px 0 14px;padding-top:14px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">真实接口接入</div>
+      <p class="hint" style="margin-bottom:10px">三步接通真机：<br>① 电脑浏览器打开 <b>cp.139.com</b> 短信登录；<br>② 按 F12 → Network，点一次「打开云手机」，找到那条请求，右键 <b>Copy as cURL (bash)</b>；<br>③ 粘贴到这里。token 在各账号「编辑」里粘贴。</p>
+      <div class="field">
+        <label>cURL 命令</label>
+        <textarea id="setCurl" rows="4" style="width:100%;border-radius:9px;border:1px solid #26332E;background:#0A100E;color:var(--text);padding:10px;font-size:12px;font-family:monospace;resize:vertical" placeholder="curl 'https://cp.139.com/...' -H 'Authorization: ...' --data-raw '{...}'"></textarea>
+      </div>
+      <div id="realApiState" class="note" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+      <div class="row">
+        <button class="btn-sm" id="btnCurlImport">导入 cURL</button>
+        <button class="btn-sm" id="btnAdapterTest">发送测试</button>
+        <button class="btn-sm" id="btnCurlClear" style="color:var(--red)">清除配置</button>
+      </div>
+    </div>
+
+    <div class="sheet-actions">
+      <button class="btn" data-close="#maskSettings">取消</button>
+      <button class="btn primary" id="btnSettingsSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 用户管理（管理员） -->
+<div class="mask" id="maskUsers">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h3>👥 用户管理</h3>
+      <button class="btn-sm" data-close="#maskUsers">关闭</button>
+    </div>
+    <p class="hint green">给客户生成专属账号：客户用它登录后，只能看到并管理<b>自己名下</b>的云手机，配额和有效期由你定。生成后账号密码会自动复制，直接发给客户即可。</p>
+    <p class="hint">🛡 自助注册的账号也在这里：带 <b>待审核</b> 标记的需要你点「通过审核」；每个账号后面标了注册 IP，同一设备 30 天内只能领一次试用、同一网络每天最多 3 个，防止到期重新注册白嫖。</p>
+    <div class="field">
+      <label>用户名 <em>*</em></label>
+      <input id="uName" placeholder="例如 kehu01（字母数字下划线）" />
+    </div>
+    <div class="field">
+      <label>密码 <em>*</em></label>
+      <input id="uPass" placeholder="至少 4 位，生成后自动复制" />
+    </div>
+    <div class="field">
+      <label>云手机配额（台）</label>
+      <input id="uQuota" inputmode="numeric" value="1" />
+      <div class="note">该客户最多能绑定几台云手机，可随时改</div>
+    </div>
+    <div class="field">
+      <label>有效期（天）</label>
+      <input id="uDays" inputmode="numeric" value="2" />
+      <div class="note">到期后该客户无法登录，名下保活自动停</div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn primary" id="btnUserCreate">＋ 生成账号（复制发客户）</button>
+    </div>
+    <div id="userList" style="margin-top:14px"></div>
+  </div>
+</div>
+
+<!-- 修改管理员账号+密码（仅管理员可见） -->
+<div class="mask" id="maskPasswd">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h3>🔑 管理员账号设置</h3>
+      <button class="btn-sm" data-close="#maskPasswd">关闭</button>
+    </div>
+    <p class="hint" id="passWho"></p>
+    <div class="field">
+      <label>管理员账号名</label>
+      <input id="pUser" placeholder="2-20 位字母/数字/下划线" />
+      <div class="note">留空表示不修改账号名，只改密码</div>
+    </div>
+    <div class="field">
+      <label>旧密码 <em>*</em></label>
+      <input id="pOld" type="password" placeholder="当前使用的密码" />
+    </div>
+    <div class="field">
+      <label>新密码</label>
+      <input id="pNew" type="password" placeholder="至少 6 位，留空表示不改密码" />
+    </div>
+    <div class="field">
+      <label>确认新密码</label>
+      <input id="pNew2" type="password" placeholder="再输一遍新密码" />
+    </div>
+    <div class="sheet-actions">
+      <button class="btn primary" id="btnPasswdSave">保存</button>
+    </div>
+    <div class="note">仅管理员可操作，客户无法修改。保存成功后，其他设备上登录的管理员会自动退出，需用新账号名/新密码重新登录。</div>
+  </div>
+</div>
+
+<!-- 看玩画面（真实云手机画面） -->
+<div class="watch-mask" id="watchMask">
+  <div class="watch-bar">
+    <span class="t" id="watchTitle">云手机画面</span>
+    <div class="view-tabs">
+      <button id="wViewPhone" class="on" type="button">云手机画面</button>
+      <button id="wViewConsole" type="button">139 网页版</button>
+    </div>
+    <button class="close" id="watchClose">关闭</button>
+  </div>
+  <div class="watch-stage" id="watchStage">
+    <img id="screenImg" alt="" draggable="false" />
+    <div class="screen-loading" id="screenLoading">
+      <div class="spinner"></div>
+      <div class="lt" id="screenLoadingText">正在启动云手机画面…（首次约 10-20 秒）</div>
+    </div>
+  </div>
+  <div class="watch-status" id="wStatus"></div>
+  <div class="ctrl">
+    <div class="send-row">
+      <input id="wText" placeholder="这里打字后回车 → 发送到云手机（先在画面里点一下输入框）" />
+      <button class="send-btn" id="wSendText">发送</button>
+    </div>
+    <div class="tri">
+      <button id="wSolve" class="hl">🤖 自动滑块</button>
+      <button id="wAudio">🔊 声音</button>
+      <button id="wReload">重新加载</button>
+      <button id="wStop">停掉浏览器</button>
+    </div>
+    <button class="finish" id="wFinish">完成</button>
+    <div class="ctrl-hint">点击可操作 · 按住拖动可翻页 / 滚动 · 滑块验证会自动识别拖动</div>
+    <div class="ctrl-sub">未登录时画面就是登录页：在画面里填手机号 → 获取验证码（滑块自动过）→ 填验证码登录，token 自动同步回面板。点「重新加载」回到登录页，可登录新的云手机账号。</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 通用结果弹窗（操作成功后显示，替代一闪而过 toast） -->
+<div class="mask center-mask" id="maskResult">
+  <div class="result-card">
+    <div class="result-icon" id="resIcon">✓</div>
+    <h3 id="resTitle">操作成功</h3>
+    <div class="result-body" id="resBody"></div>
+    <button class="btn primary" id="resOk">知道了</button>
+  </div>
+</div>
+
+<!-- 改天数输入弹窗（应用内，替代原生 prompt，手机内嵌浏览器必定可用） -->
+<div class="mask center-mask" id="maskDays">
+  <div class="result-card days-card">
+    <h3>设置剩余有效天数</h3>
+    <div class="result-body" id="daysTarget" style="text-align:left"></div>
+    <div class="field" style="margin-top:12px;text-align:left">
+      <label>天数（最少 1 天，最多 3650 天）</label>
+      <input id="daysInput" inputmode="numeric" placeholder="请输入天数" />
+    </div>
+    <div class="sheet-actions">
+      <button class="btn" data-close="#maskDays">取消</button>
+      <button class="btn primary" id="daysOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+let state = null;
+let product = 'phone';
+let autoLeft = 20;
+let editingId = null;
+let watchAccId = null;
+let busy = false;
+
+const pad = (n) => String(n).padStart(2, '0');
+
+function fmtTime(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+function rel(ts, suffix) {
+  if (!ts) return '—';
+  if (suffix) {
+    const m = Math.round((ts - Date.now()) / 60000);
+    if (m <= 0) return '即将';
+    if (m < 60) return m + ' 分钟后';
+    return Math.round(m / 60) + ' 小时后';
+  }
+  const diff = Math.round((Date.now() - ts) / 60000);
+  if (diff < 1) return '刚刚';
+  if (diff < 60) return diff + ' 分钟前';
+  if (diff < 1440) return Math.round(diff / 60) + ' 小时前';
+  return Math.round(diff / 1440) + ' 天前';
+}
+function maskPhone(p) {
+  if (!p) return '';
+  if (p.includes('*')) return p;
+  return p.length === 11 ? p.slice(0, 3) + '****' + p.slice(7) : p;
+}
+
+/* 有效期显示：新账号 2 天起；续期叠加；秒级实时倒计时，到期显示已过期 */
+function fmtExpire(a) {
+  if (!a.expireAt) return '未续期';
+  const ms = a.expireAt - Date.now();
+  if (ms <= 0) return '已过期';
+  const s = Math.floor(ms / 1000);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return d + '天' + h + '小时' + m + '分' + sec + '秒';
+}
+
+/* 开机时长实时显示（每秒重算，按服务端记录的开机时刻） */
+function uptimeText(dev) {
+  if (!dev.onSince) return '已开机';
+  const s = Math.max(0, Math.floor((Date.now() - dev.onSince) / 1000));
+  if (s < 60) return '开机 ' + s + ' 秒';
+  if (s < 3600) return '开机 ' + Math.floor(s / 60) + ' 分 ' + (s % 60) + ' 秒';
+  return '开机 ' + Math.floor(s / 3600) + ' 小时 ' + Math.floor((s % 3600) / 60) + ' 分';
+}
+setInterval(() => {
+  $$('[data-realat]').forEach((el) => {
+    const at = Number(el.dataset.realat) || 0;
+    if (!at) { el.textContent = ''; return; }
+    const sec = Math.max(0, Math.round((Date.now() - at) / 1000));
+    el.textContent = sec < 5 ? '刚刚实时确认' : `实时确认于 ${sec < 90 ? sec + ' 秒前' : Math.round(sec / 60) + ' 分钟前'}`;
+  });
+  $$('[data-uptime]').forEach((el) => {
+    const since = Number(el.dataset.uptime) || 0;
+    if (!since) return;
+    el.textContent = uptimeText({ onSince: since });
+  });
+  // 有效期秒级倒计时
+  $$('[data-expire]').forEach((el) => {
+    const exp = Number(el.dataset.expire) || 0;
+    if (!exp) return;
+    const ms = exp - Date.now();
+    el.textContent = ms <= 0 ? '已过期' : fmtExpire({ expireAt: exp });
+    // 刚到期的瞬间 → 通知服务端停用该账号保活
+    if (ms <= 0 && ms > -2000 && !el.dataset.expired) {
+      el.dataset.expired = '1';
+      api('/api/sync-status', 'POST', {}).then((r) => { if (r && r.state) { state = r.state; render(); } }).catch(() => {});
+    }
+  });
+}, 1000);
+function toast(msg) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+/* 通用结果弹窗：showResult({ ok, title, html })
+   ok=true 绿色对勾 / false 红色叉号；html 支持简单标签，用于展示到期时间等 */
+function showResult({ ok = true, title, html } = {}) {
+  $('#resIcon').textContent = ok ? '✓' : '!';
+  $('#resIcon').classList.toggle('fail', !ok);
+  $('#resTitle').textContent = title || (ok ? '操作成功' : '操作失败');
+  $('#resBody').innerHTML = html || '';
+  open('#maskResult');
+}
+$('#resOk').addEventListener('click', () => close('#maskResult'));
+
+/* 应用内天数输入弹窗：替代原生 prompt，返回 Promise<number|null>
+   手机内嵌浏览器对 prompt() 支持很差，这里用页面内弹窗保证必定可见 */
+function askDays(targetText, defaultValue) {
+  return new Promise((resolve) => {
+    $('#daysTarget').innerHTML = targetText || '';
+    const input = $('#daysInput');
+    input.value = defaultValue != null ? String(defaultValue) : '';
+    let done = false;
+    const finish = (val) => {
+      if (done) return;
+      done = true;
+      // 解绑一次性监听
+      daysOk.removeEventListener('click', onOk);
+      daysCancel.removeEventListener('click', onCancel);
+      $('#maskDays').removeEventListener('click', onMask);
+      close('#maskDays');
+      resolve(val);
+    };
+    const onOk = () => {
+      const days = Math.floor(Number(String(input.value).trim()));
+      if (!Number.isFinite(days) || days < 1) { toast('天数无效：至少 1 天'); return; }
+      if (days > 3650) { toast('天数过大：最多 3650 天'); return; }
+      finish(days);
+    };
+    const onCancel = () => finish(null);
+    const onMask = (e) => { if (e.target === $('#maskDays')) finish(null); };
+    const daysOk = $('#daysOk');
+    const daysCancel = $('#maskDays [data-close]');
+    daysOk.addEventListener('click', onOk);
+    daysCancel.addEventListener('click', onCancel);
+    $('#maskDays').addEventListener('click', onMask);
+    input.onkeydown = (e) => { if (e.key === 'Enter') onOk(); };
+    open('#maskDays');
+    setTimeout(() => { try { input.focus(); input.select(); } catch {} }, 80);
+  });
+}
+let authToken = localStorage.getItem('kp_token') || '';
+let me = null;
+
+async function api(path, method = 'GET', body) {
+  const res = await fetch(path, {
+    method,
+    headers: {
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(authToken ? { 'x-auth-token': authToken } : {})
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (res.status === 401) {
+    authToken = '';
+    localStorage.removeItem('kp_token');
+    me = null;
+    showLogin(true);
+    throw new Error('未登录');
+  }
+  return res.json();
+}
+
+/* ===== 登录页逻辑 ===== */
+function showLogin(show) {
+  $('#loginMask').classList.toggle('show', show);
+  // 未登录时不渲染主界面：宽屏/电脑模式下也不会从登录卡片四周露出控制台内容
+  document.body.classList.toggle('locked', show);
+  // 回到登录页时，关掉所有业务弹窗（添加账号/设置/用户管理等）
+  if (show) $$('.mask.show').forEach((m) => m.classList.remove('show'));
+}
+$('#btnDoLogin').addEventListener('click', doLogin);
+$('#lPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+async function doLogin() {
+  const username = $('#lUser').value.trim();
+  const password = $('#lPass').value;
+  if (!username || !password) { $('#lErr').textContent = '请输入用户名和密码'; return; }
+  $('#lErr').textContent = '';
+  const r = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  }).then((x) => x.json()).catch(() => ({ ok: false, message: '连接失败' }));
+  if (!r.ok) { $('#lErr').textContent = r.message || '登录失败'; return; }
+  authToken = r.token;
+  localStorage.setItem('kp_token', authToken);
+  me = r.me;
+  showLogin(false);
+  $('#lPass').value = '';
+  $('#lErr').textContent = '';
+  applyMe();
+  load(true).then(() => autoOpenFromUrl());
+}
+/* 注册账号：自助注册，注册成功自动登录，有效期 2 天 */
+function switchLTab(login) {
+  $('#ltabLogin').classList.toggle('on', login);
+  $('#ltabReg').classList.toggle('on', !login);
+  $('#lLogin').style.display = login ? '' : 'none';
+  $('#lReg').style.display = login ? 'none' : '';
+  $('#lErr').textContent = ''; $('#rErr').textContent = '';
+}
+$('#ltabLogin').addEventListener('click', () => switchLTab(true));
+$('#ltabReg').addEventListener('click', () => switchLTab(false));
+$('#btnDoReg').addEventListener('click', doReg);
+$('#rPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') doReg(); });
+/* 设备指纹：canvas + UA + 屏幕/时区等特征哈希，用于防"到期重新注册白嫖" */
+function deviceFp() {
+  try {
+    const k = 'kp_devfp';
+    let v = localStorage.getItem(k);
+    if (v) return v;
+    const c = document.createElement('canvas'); c.width = 220; c.height = 44;
+    const x = c.getContext('2d');
+    x.textBaseline = 'top'; x.font = '14px Arial';
+    x.fillStyle = '#f60'; x.fillRect(0, 0, 120, 20);
+    x.fillStyle = '#069'; x.fillText(navigator.userAgent.slice(0, 22), 2, 4);
+    x.strokeStyle = 'rgba(120,60,200,.6)'; x.beginPath(); x.arc(160, 22, 12, 0, Math.PI * 2); x.stroke();
+    const raw = [c.toDataURL(), navigator.userAgent, navigator.language,
+      screen.width + 'x' + screen.height + ':' + screen.colorDepth,
+      new Date().getTimezoneOffset(), navigator.hardwareConcurrency || 0, navigator.platform || ''].join('|');
+    let h = 0x811c9dc5;
+    for (let i = 0; i < raw.length; i++) { h ^= raw.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    v = h.toString(16).padStart(8, '0') + '-' + raw.length.toString(16) + '-' + (navigator.hardwareConcurrency || 0);
+    localStorage.setItem(k, v);
+    return v;
+  } catch { return ''; }
+}
+async function doReg() {
+  const username = $('#rUser').value.trim();
+  const password = $('#rPass').value;
+  if (!username || !password) { $('#rErr').textContent = '请输入用户名和密码'; return; }
+  $('#rErr').textContent = '注册中…';
+  const r = await fetch('/api/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, fp: deviceFp() })
+  }).then((x) => x.json()).catch(() => ({ ok: false, message: '连接失败' }));
+  if (!r.ok) { $('#rErr').textContent = r.message || '注册失败'; return; }
+  $('#rUser').value = ''; $('#rPass').value = ''; $('#rErr').textContent = '';
+  if (r.pending) {
+    // 审核模式：不自动登录，回登录页并提示等待审核
+    switchLTab(true);
+    $('#lErr').textContent = r.message || '注册成功，等待管理员审核';
+    $('#lUser').value = username;
+    return;
+  }
+  authToken = r.token;
+  localStorage.setItem('kp_token', authToken);
+  me = r.me;
+  showLogin(false);
+  applyMe();
+  load(true).then(() => autoOpenFromUrl());
+}
+function applyMe() {
+  if (!me) return;
+  const isAdmin = me.role === 'admin';
+  $('#btnUsers').style.display = isAdmin ? '' : 'none';
+  $('#btnPasswd').style.display = isAdmin ? '' : 'none';
+  $('#btnSettings').style.display = isAdmin ? '' : 'none';
+  // 日志页签：管理员看全部，客户看自己名下云机的日志（后端已按归属过滤）
+  $('#tabLogs').style.display = '';
+  $('#btnLogClear').style.display = isAdmin ? '' : 'none';
+  $('#welcomeBar').style.display = isAdmin ? 'none' : 'block';
+  $('#wlName').textContent = me.username;
+  if (!isAdmin) {
+    const used = (state ? state.accounts : []).length;
+    $('#wlQuota').textContent = used + ' / ' + (me.quota != null ? me.quota : 1) + ' 台';
+    renderWelcomeExpire();
+    renderWelcomeMachines();
+  }
+}
+/* 欢迎条内：每台云机一枚小卡，左右滑动查看各自的到期倒计时 */
+function renderWelcomeMachines() {
+  const box = $('#wlMachines');
+  if (!me || me.role === 'admin' || !state) { box.style.display = 'none'; return; }
+  const list = state.accounts || [];
+  if (!list.length) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = list.map((a) => {
+    const exp = a.expireAt;
+    let right = '长期有效';
+    if (exp) {
+      const s = Math.floor((exp - Date.now()) / 1000);
+      right = s > 0
+        ? '剩 <b class="num" data-mexp="' + exp + '">' + fmtUserExpire(exp) + '</b>'
+        : '<span style="color:#FFD2CC">已过期</span>';
+    }
+    return '<span style="display:inline-flex;align-items:center;gap:5px;margin:0 7px 0 0;padding:5px 10px;border-radius:9px;background:rgba(255,255,255,.18);font-size:11.5px">' +
+      '<span style="opacity:.85">' + esc(a.title || a.phone || '云机') + '</span><span style="opacity:.75">·</span><span>' + right + '</span></span>';
+  }).join('');
+}
+function renderWelcomeExpire() {
+  if (!me || !me.expireAt) { $('#wlExpire').textContent = '长期有效'; return; }
+  const ms = me.expireAt - Date.now();
+  if (ms <= 0) { $('#wlExpire').textContent = '已过期，请联系管理员'; return; }
+  const s = Math.floor(ms / 1000);
+  $('#wlExpire').textContent = s + ' 秒（至 ' + new Date(me.expireAt).toLocaleDateString() + '）';
+}
+setInterval(() => {
+  if (me && me.expireAt && $('#welcomeBar').style.display !== 'none' && !$('#welcomeBar').hidden) {
+    // 账户有效期分钟级显示即可，避免每秒太密
+    const ms = me.expireAt - Date.now();
+    if (ms > 0) {
+      const s = Math.floor(ms / 1000);
+      const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+      $('#wlExpire').textContent = (d > 0 ? d + '天' : '') + h + '小时' + m + '分' + String(sec).padStart(2, '0') + '秒' + '（至 ' + new Date(me.expireAt).toLocaleDateString() + '）';
+    } else {
+      $('#wlExpire').textContent = '已过期，请联系管理员';
+    }
+    // 每台云机的小卡倒计时也每秒刷新
+    $$('[data-mexp]').forEach((el) => {
+      const t = Number(el.dataset.mexp);
+      el.textContent = fmtUserExpire(t);
+    });
+  }
+}, 1000);
+// 退出登录统一走下方带确认的 btnLogout 处理器（此处不再重复绑定，避免"点取消也退出"）
+
+/* ===== 用户管理（管理员） ===== */
+/* ===== 管理员账号设置（仅管理员） ===== */
+$('#btnPasswd').addEventListener('click', () => {
+  $('#passWho').innerHTML = '当前管理员账号：<b>' + (me ? me.username : '') + '</b>';
+  $('#pUser').value = me ? me.username : '';
+  $('#pOld').value = ''; $('#pNew').value = ''; $('#pNew2').value = '';
+  open('#maskPasswd');
+});
+$('#btnPasswdSave').addEventListener('click', async () => {
+  const oldP = $('#pOld').value, newP = $('#pNew').value, newP2 = $('#pNew2').value;
+  const newU = $('#pUser').value.trim();
+  if (!oldP) return toast('请输入旧密码');
+  if (newP && newP.length < 6) return toast('新密码至少 6 位');
+  if (newP && newP !== newP2) return toast('两次输入的新密码不一致');
+  if (!newP && (!newU || newU === (me ? me.username : ''))) return toast('账号名和密码至少要改一个');
+  const btn = $('#btnPasswdSave');
+  btn.disabled = true; btn.textContent = '保存中…';
+  const r = await api('/api/auth/password', 'POST', { oldPassword: oldP, newPassword: newP, newUsername: newU }).catch(() => ({ ok: false, message: '连接失败' }));
+  btn.disabled = false; btn.textContent = '保存';
+  if (!r.ok) return toast(r.message || '保存失败');
+  close('#maskPasswd');
+  toast('✅ ' + (r.message || '已保存'));
+  load(true);
+});
+$('#btnUsers').addEventListener('click', () => { open('#maskUsers'); renderUsers(); });
+async function renderUsers() {
+  const r = await api('/api/users');
+  const list = r.users || [];
+  $('#userList').innerHTML = list.map((u) => {
+    const used = (state.accounts || []).filter((a) => (a.owner || '') === u.id).length;
+    if (u.role === 'admin') {
+      return `<div class="uitem"><div class="un">👑 ${esc(u.username)}（管理员）</div><span class="chip">已用 ${used} 台</span><span class="chip">长期有效</span></div>`;
+    }
+    const expChip = u.pending
+      ? '<span class="chip" style="color:#D8A24A">审核通过后开始计 2 天</span>'
+      : (u.expireAt
+        ? (u.expireAt < Date.now()
+          ? '<span class="chip" style="color:var(--red)">已过期</span>'
+          : '<span class="chip">剩 <b class="num" data-uexp="' + u.expireAt + '">' + fmtUserExpire(u.expireAt) + '</b></span>')
+        : '<span class="chip">长期有效</span>');
+    const pendingChip = u.pending ? '<span class="chip" style="color:#D8A24A;border-color:#D8A24A">待审核</span>' : '';
+    const regChip = u.regIp ? '<span class="chip" title="注册 IP / 时间">📍 ' + esc(u.regIp) + '</span>' : '';
+    return `<div class="uitem">
+      <div class="un">${esc(u.username)}${u.disabled ? '（已停用）' : ''}</div>
+      ${pendingChip}
+      <span class="chip">配额 ${used}/${u.quota} 台</span>
+      ${expChip}
+      ${regChip}
+      <span class="sp"></span>
+      ${u.pending ? `<button class="btn-sm" data-uact="approve" data-uid="${u.id}" style="color:var(--green);border-color:var(--green)">✓ 通过审核</button>` : ''}
+      <button class="btn-sm" data-uact="renew" data-uid="${u.id}">续期+30天</button>
+      <button class="btn-sm" data-uact="setdays" data-uid="${u.id}">改天数</button>
+      <button class="btn-sm" data-uact="setquota" data-uid="${u.id}">改配额</button>
+      <button class="btn-sm" data-uact="reset" data-uid="${u.id}">改密</button>
+      <button class="btn-sm" data-uact="toggle" data-uid="${u.id}">${u.disabled ? '启用' : '停用'}</button>
+      <button class="btn-sm" data-uact="del" data-uid="${u.id}">删除</button>
+    </div>`;
+  }).join('') || '<p class="hint">还没有客户账号，先在上方生成一个。</p>';
+}
+/* 用户有效期实时倒计时（秒级） */
+function fmtUserExpire(ts) {
+  const s = Math.max(0, Math.floor((ts - Date.now()) / 1000));
+  const d = Math.floor(s / 86400);
+  const h = String(Math.floor((s % 86400) / 3600)).padStart(2, '0');
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const sec = String(s % 60).padStart(2, '0');
+  return (d > 0 ? d + '天' : '') + h + ':' + m + ':' + sec;
+}
+setInterval(() => {
+  $$('[data-uexp]').forEach((el) => {
+    el.textContent = fmtUserExpire(Number(el.dataset.uexp));
+  });
+}, 1000);
+$('#btnUserCreate').addEventListener('click', async () => {
+  const username = $('#uName').value.trim();
+  const password = $('#uPass').value.trim();
+  const quota = Number($('#uQuota').value) || 1;
+  const days = Number($('#uDays').value) || 2;
+  const r = await api('/api/users', 'POST', { username, password, quota, days });
+  toast(r.message || (r.ok ? '已生成' : '失败'));
+  if (r.ok) {
+    $('#uName').value = ''; $('#uPass').value = '';
+    const auto = '账号：' + username + '  密码：' + password;
+    try { await navigator.clipboard.writeText(auto); toast(r.message + '（已复制账号密码）'); } catch { /* 忽略 */ }
+    renderUsers();
+  }
+});
+$('#userList').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-uact]');
+  if (!btn) return;
+  const uid = btn.dataset.uid, act = btn.dataset.uact;
+  const u = (await api('/api/users')).users.find((x) => x.id === uid);
+  if (!u) return;
+  if (act === 'approve') {
+    const r = await api('/api/users/' + uid, 'PATCH', { pending: false });
+    toast(r.ok ? '已通过审核，' + u.username + ' 有效期从此刻起 2 天' : (r.message || '操作失败'));
+    renderUsers();
+  } else if (act === 'reset') {    const p = prompt('为 ' + u.username + ' 设置新密码：');
+    if (!p) return;
+    const r = await api('/api/users/' + uid, 'PATCH', { password: p });
+    toast(r.message || '已修改');
+  } else if (act === 'renew') {
+    // 一键续期：直接 +30 天（可叠加）
+    const r = await api('/api/users/' + uid, 'PATCH', { extendDays: 30 });
+    toast((r.message || '已续期') + '：' + u.username + ' +30 天');
+  } else if (act === 'setdays') {
+    // 管理员手动指定剩余有效期（天），最小 1 天：到期时间 = 现在 + N 天
+    const input = prompt('为 ' + u.username + ' 设置剩余有效天数（最小 1 天，整数）：', '2');
+    if (input === null) return;
+    const days = Math.floor(Number(String(input).trim()));
+    if (!Number.isFinite(days) || days < 1) { toast('天数无效：至少 1 天'); return; }
+    if (days > 3650) { toast('天数过大：最多 3650 天'); return; }
+    const r = await api('/api/users/' + uid, 'PATCH', { days });
+    toast(r.ok ? (r.message + '：' + u.username + ' 剩余 ' + days + ' 天') : (r.message || '设置失败'));
+  } else if (act === 'setquota') {
+    // 管理员自定义云手机配额（台）
+    const input = prompt('为 ' + u.username + ' 设置云手机配额（台，1-999）：', String(u.quota || 1));
+    if (input === null) return;
+    const q = Math.floor(Number(String(input).trim()));
+    if (!Number.isFinite(q) || q < 1) { toast('配额无效：至少 1 台'); return; }
+    if (q > 999) { toast('配额过大：最多 999 台'); return; }
+    const r = await api('/api/users/' + uid, 'PATCH', { quota: q });
+    toast(r.ok ? '已更新配额：' + u.username + ' 可绑 ' + q + ' 台' : (r.message || '设置失败'));
+    renderUsers();
+  } else if (act === 'toggle') {
+    const r = await api('/api/users/' + uid, 'PATCH', { disabled: !u.disabled });
+    toast(r.message || '已操作');
+  } else if (act === 'del') {
+    if (!confirm('删除用户 ' + u.username + '？其名下云手机记录将转回管理员。')) return;
+    const r = await api('/api/users/' + uid, 'DELETE');
+    toast(r.message || '已删除');
+  }
+  renderUsers();
+});
+function currentAccounts() {
+  if (!state) return [];
+  return state.accounts.filter((a) => a.product === product);
+}
+
+function render() {
+  if (!state) return;
+  renderWelcomeMachines();
+  const list = currentAccounts();
+  const on = list.filter((a) => a.enabled);
+  const ok = list.reduce((s, a) => s + a.success, 0);
+  const fail = list.reduce((s, a) => s + a.fail, 0);
+
+  $('#sAccOn').textContent = on.length;
+  $('#sAccAll').textContent = list.length;
+  $('#sDevLabel').textContent = product === 'pc' ? '云电脑' : '云手机';
+  $('#sDev').textContent = list.reduce((s, a) => s + (a.devices || []).length, 0);
+  $('#sOk').textContent = ok;
+  $('#sFail').textContent = fail;
+  $('#sFail').style.color = fail > 0 ? 'var(--red)' : 'var(--text-2)';
+  $('#sRounds').textContent = state.rounds;
+  $('#sLast').textContent = rel(state.lastRoundAt);
+  $('#sNext').textContent = rel(state.nextRoundAt, true);
+
+  $('#chipTitle').textContent = product === 'pc' ? '爱家云电脑' : '移动云手机 v3';
+  const s = state.settings;
+  const paused = on.length === 0;
+  $('#subLine').textContent = `${fmtTime(state.lastRoundAt || Date.now())} · 每 ${s.intervalMinutes} 分钟保活一次 · ${paused ? '已暂停' : '全天运行'}`;
+
+  $('#watchMode').value = s.watchMode;
+  $('#watchTag').textContent = state.running ? '执行中…' : '运行中';
+  $('#watchTag').className = 'tag ' + (state.running ? '' : 'live');
+  autoLeft = s.autoRefreshSeconds;
+
+  const ra = state.realApi;
+  $('#realApiState').textContent = ra
+    ? `已配置真实接口：${ra.method} ${ra.url.slice(0, 60)}${ra.url.length > 60 ? '…' : ''}`
+    : (s.apiMode === 'real' ? '真实模式：使用内置移动云手机协议（instancePrepareV2）' : '当前为模拟模式，切到「真实」即可直连移动云手机');
+
+  renderList(list);
+}
+
+const WATCH_TEXT = { resident: '常驻', scheduled: '定时', off: '未启用' };
+
+function renderList(list) {
+  const box = $('#accList');
+  if (!list.length) {
+    box.innerHTML = '<div class="empty">这个分类下还没有账号</div>';
+    return;
+  }
+  box.innerHTML = list.map((a) => {
+    const dev = (a.devices || [])[0] || {};
+    const devOn = dev.power === 'on';
+    const watchLabel = a.watchSession ? '看玩中' : WATCH_TEXT[a.watch] || '未启用';
+    return `
+    <div class="acc ${a.enabled ? '' : 'paused'}" data-id="${a.id}">
+      <div class="acc-title"><span class="dot ${a.enabled ? 'on' : 'off'}"></span>${esc(a.title)}</div>
+      <div class="acc-meta">
+        <span>成功 <b class="ok num">${a.success}</b></span>
+        <span>失败 <b class="${a.fail ? 'bad' : ''} num">${a.fail}</b></span>
+        ${a.phone ? `<span>·</span><span>${esc(maskPhone(a.phone))}</span>` : ''}
+        <span>·</span><span>有效期 <b class="num" style="color:var(--text-2)" data-expire="${a.expireAt || ''}">${fmtExpire(a)}</b></span>
+        ${a.note ? `<span>·</span><span>${esc(a.note)}</span>` : ''}
+        ${(a.session && a.session.status === 'need_login') ? `<span class="chip-r">需重新登录</span>` : (a.cpTokenSet ? `<span class="chip-g">会话就绪${a.session && a.session.tokenTail ? ' ·' + a.session.tokenTail : ''}</span>` : '')}
+      </div>
+      ${(() => {
+        const devs = (a.devices || []).filter((d) => d && d.id);
+        if (!devs.length) return `
+      <div class="dev">
+        <div class="dev-l1"><span class="muted">暂无云手机记录（登录后自动出现）</span></div>
+        <div class="dev-btns" style="grid-template-columns:1fr">
+          <button class="dev-btn" data-act="refreshdev">从服务器刷新</button>
+        </div>
+      </div>`;
+        return (devs.length > 1 ? `<div class="dev-sum">共 <b>${devs.length}</b> 台云手机 · 全部参与保活</div>` : '') +
+          devs.map((dev, idx) => {
+            const devOn = dev.power === 'on';
+            return `
+      <div class="dev">
+        <div class="dev-l1">
+          <span class="did">${esc(dev.id)}</span>
+          <span class="chip-n">${esc(dev.plan || '')}</span>
+          <span class="${dev.realCode === 0 ? 'chip-g' : (dev.realCode === undefined || dev.realCode === null) ? (devOn ? 'chip-g' : 'chip-n') : 'chip-r'}">${esc(dev.realText || (devOn ? '已开机' : '已关机'))}</span>
+          <span class="muted" data-realat="${dev.realAt || ''}">${dev.realAt ? '已实时确认' : ''}</span>
+          <span class="muted" data-uptime="${devOn ? (dev.onSince || 0) : ''}">${devOn ? uptimeText(dev) : ''}</span>
+        </div>
+        ${dev.statusText ? `<div class="dev-status"><span class="sk">状态</span><span>${esc(dev.statusText)}</span></div>` : ''}
+        <div class="dev-btns">
+          <button class="dev-btn" data-act="power" data-power="on" data-device="${esc(dev.id)}">开机</button>
+          <button class="dev-btn" data-act="power" data-power="reboot" data-device="${esc(dev.id)}">重启</button>
+          <button class="dev-btn" data-act="power" data-power="off" data-device="${esc(dev.id)}">关机</button>
+          <button class="dev-btn play" data-act="watch">看/玩</button>
+        </div>
+        ${idx === 0 ? '<div class="dev-more"><button class="dev-btn" data-act="more">更多查询</button></div>' : ''}
+      </div>`;
+          }).join('');
+      })()}
+      <div class="acc-actions">
+        ${me && me.role === 'admin' ? '<button class="btn" data-act="renew">立即续期</button><button class="btn" data-act="setdays">改天数</button>' : ''}
+        <button class="btn" data-act="edit">编辑</button>
+        <button class="btn" data-act="toggle">${a.enabled ? '停用' : '启用'}</button>
+        <button class="btn danger" data-act="del">删除</button>
+      </div>
+      <div class="watchline">看玩保活（<b>${watchLabel}</b>）<span class="link" data-act="watchcycle">切换</span></div>
+    </div>`;
+  }).join('');
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+async function load(silent) {
+  if (busy) return;
+  busy = true;
+  const icon = $('#btnRefreshTop svg');
+  if (!silent) icon.classList.add('spin');
+  try {
+    state = await api('/api/state');
+    autoLeft = state.settings.autoRefreshSeconds;
+    render();
+    if (product === 'logs') renderLogs();
+    if (me) applyMe();
+  } catch {
+    if (!silent) toast('连接失败，检查服务是否启动');
+  } finally {
+    busy = false;
+    setTimeout(() => icon.classList.remove('spin'), 300);
+  }
+}
+
+/* 弹层 */
+function open(sel) { $(sel).classList.add('show'); }
+function close(sel) { $(sel).classList.remove('show'); }
+$$('[data-close]').forEach((b) => b.addEventListener('click', () => close(b.dataset.close)));
+$$('.mask').forEach((m) => m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('show'); }));
+
+/* 真实开关机状态自动同步：每 45 秒从 139 服务器拉一次，云手机开机/关机自动反映到卡片 */
+let lastStatusSync = 0;
+async function syncDeviceStatus() {
+  const now = Date.now();
+  if (now - lastStatusSync < 44000) return;
+  lastStatusSync = now;
+  try {
+    const r = await api('/api/sync-status', 'POST', {});
+    if (r.ok && r.changed) { state = r.state; render(); }
+  } catch { /* 忽略 */ }
+}
+setInterval(syncDeviceStatus, 15000);
+syncDeviceStatus();
+
+/* 顶部 tab / 刷新 */
+$$('.tab').forEach((t) => t.addEventListener('click', () => {
+  product = t.dataset.product;
+  $$('.tab').forEach((x) => x.classList.toggle('active', x === t));
+  const isLogs = product === 'logs';
+  $('#logsView').style.display = isLogs ? 'block' : 'none';
+  // 日志页隐藏云手机视图元素
+  $$('.stats, .actions, .card.watch, #accList, .autorefresh').forEach((el) => { el.style.display = isLogs ? 'none' : ''; });
+  // 欢迎条仅客户可见：日志页签下隐藏（管理员始终隐藏）
+  if (me) $('#welcomeBar').style.display = (isLogs || me.role === 'admin') ? 'none' : 'block';
+  if (isLogs) renderLogs();
+  render();
+}));
+
+/* 日志渲染 */
+function renderLogs() {
+  const box = $('#termBox');
+  const logs = (state && state.logs) || [];
+  box.innerHTML = logs.length ? logs.map((l) => {
+    const lv = l.level === 'success' ? 'SUCCESS' : l.level === 'error' ? 'ERROR' : 'INFO';
+    return `<div class="ln"><span class="ts">[${fmtTime(l.at)}]</span> <span class="lv lv-${l.level || 'info'}">[${lv}]</span>\n<span class="acc">[${esc(l.account || '')}]</span><span class="plan">[${esc(l.plan || '')}]</span> <span class="msg">${esc(l.message || '')}</span></div>`;
+  }).join('') : '<div class="ts">暂无日志 · 等保活跑一轮，或点上方「刷新」</div>';
+}
+$('#btnLogRefresh').addEventListener('click', async () => {
+  state = await api('/api/state');
+  renderLogs();
+  toast('日志已刷新');
+});
+$('#btnLogClear').addEventListener('click', async () => {
+  if (!confirm('清空全部日志？')) return;
+  const r = await api('/api/logs/clear', 'POST', {});
+  if (r.state) state = r.state;
+  renderLogs();
+  toast('已清空');
+});
+$('#btnRefreshTop').addEventListener('click', () => load(false));
+$('#btnRefresh').addEventListener('click', () => load(false).then(() => toast('已刷新')));
+/* 退出登录：清除本地 token + 服务端会话，回到登录页（重新登录即可继续使用） */
+$('#btnLogout').addEventListener('click', async () => {
+  if (!confirm('确定退出登录吗？退出后需要重新输入用户名密码。')) return;
+  try { await api('/api/auth/logout', 'POST', {}); } catch { /* 已失效也无所谓 */ }
+  authToken = '';
+  localStorage.removeItem('kp_token');
+  me = null;
+  showLogin(true);
+  toast('已退出登录');
+});
+
+/* 全局按钮 */
+$('#watchMode').addEventListener('change', async (e) => {
+  const r = await api('/api/settings', 'POST', { watchMode: e.target.value });
+  state = r.state; render(); toast('看玩模式已更新');
+});
+$('#btnWatchRefresh').addEventListener('click', async () => { await load(true); toast('状态已同步'); });
+
+/* 看玩画面（真实云手机画面 + 控制栏） */
+let screenOn = false;
+let audioMuted = true;
+
+function setWatchStatus(msg) { $('#wStatus').textContent = msg || ''; }
+
+function showScreenLoading(text) {
+  $('#screenImg').style.display = 'none';
+  $('#screenLoading').style.display = 'flex';
+  if (text) $('#screenLoadingText').textContent = text;
+}
+
+let lastConnectAt = 0, currentStreamUrl = '', streamFails = 0, imgPending = false, streamStartedAt = 0, statusFails = 0;
+let snapTimer = null, snapFirstTimer = null;
+function stopSnapPoll() {
+  if (snapTimer) { clearInterval(snapTimer); snapTimer = null; }
+  if (snapFirstTimer) { clearTimeout(snapFirstTimer); snapFirstTimer = null; }
+}
+let snapActive = false;
+function stopSnapPoll() {
+  snapActive = false;
+  if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
+}
+function snapNext(delay) {
+  // 串行取帧：等上一张加载完成/失败后再取下一张（固定间隔会中止未下完的图，弱网下一张也出不来）
+  if (!snapActive || !watchAccId || !$('#watchMask').classList.contains('show')) return;
+  if (snapTimer) clearTimeout(snapTimer);
+  snapTimer = setTimeout(() => {
+    if (!snapActive) return;
+    // <img> 带不了请求头：token 走 URL 参数（服务端已支持兜底鉴权）
+    $('#screenImg').src = `/api/accounts/${watchAccId}/screen/snap?q=45&token=${encodeURIComponent(authToken)}&t=` + Date.now();
+  }, delay);
+}
+function startSnapPoll() {
+  if (snapActive) return;
+  snapActive = true;
+  snapNext(0);
+}
+/* 画面 img 事件绑定：快照模式与视频流模式共用（不绑定的话快照加载成功也不会显示，永远卡"接收中"） */
+function ensureImgHandlers() {
+  const img = $('#screenImg');
+  img.onload = () => {
+    streamFails = 0; statusFails = 0; imgPending = false;
+    img.style.display = 'block';
+    $('#screenLoading').style.display = 'none';
+    screenOn = true;
+    if (snapActive) { snapNext(700); return; } // 快照模式：画面已显示，继续取下一帧保持刷新
+    stopSnapPoll();
+  };
+  img.onerror = () => {
+    imgPending = false;
+    screenOn = false;
+    if (snapActive) { showScreenLoading('画面接收中…（快照模式）'); snapNext(1500); return; } // 快照模式：失败后继续下一帧
+    streamFails++;
+    if (watchAccId && $('#watchMask').classList.contains('show')) {
+      if (streamFails >= 2) {
+        // 视频流连不上（弱网/代理缓冲）：直接切快照模式，逐帧加载，稳定不卡「重连中」
+        showScreenLoading('画面接收中…（快照模式）');
+        startSnapPoll();
+        return;
+      }
+      showScreenLoading('画面重连中…');
+    }
+  };
+}
+
+function startStream(streamUrl, force) {
+  const img = $('#screenImg');
+  if (streamUrl) currentStreamUrl = streamUrl;
+  const now = Date.now();
+  if (!force && now - lastConnectAt < 4000) return; // 防抖
+  lastConnectAt = now; streamStartedAt = now; imgPending = true;
+  img.style.display = 'none'; // 接流中先隐藏画面区，防止显示破图占位
+  stopSnapPoll();
+  if (snapFirstTimer) clearTimeout(snapFirstTimer);
+  ensureImgHandlers();
+  img.src = `${currentStreamUrl}?token=${encodeURIComponent(authToken)}&t=${now}`;
+  screenOn = false;
+  // 弱网/代理缓冲兜底：8 秒还没出首帧，自动切到逐帧快照模式（对公网代理最稳）
+  snapFirstTimer = setTimeout(() => {
+    if (!screenOn && !snapTimer && watchAccId && $('#watchMask').classList.contains('show')) {
+      showScreenLoading('画面接收中…（快照模式）');
+      startSnapPoll();
+    }
+  }, 8000);
+}
+
+/* 看门狗：画面弹窗开着且画面没出来时，每 3 秒托管一次（接流/重连/复活进程），不会卡死 */
+let watchdogTimer = null, watchOpenedAt = 0, onReadyCb = null;
+async function watchdogTick() {
+  if (!watchAccId || !$('#watchMask').classList.contains('show')) return;
+  if (screenOn) return; // 画面正常
+  const st = await api(`/api/accounts/${watchAccId}/screen/status`, 'GET', {}).catch(() => null);
+  if (!watchAccId || !$('#watchMask').classList.contains('show')) return;
+  if (!st) {
+    // 状态接口暂时不通：不放弃；快照模式在跑就别打断
+    statusFails++;
+    if (snapActive) { showScreenLoading('画面接收中…（快照模式）'); return; }
+    showScreenLoading('正在连接画面…');
+    if (statusFails >= 2 && currentStreamUrl) startStream(null, true);
+    return;
+  }
+  statusFails = 0;
+  if (/不存在/.test(st.message || '')) { showScreenLoading('该账号卡已被删除，请关闭后重新添加'); return; }
+  if (st.ready) {
+    if (snapActive) { showScreenLoading('画面接收中…（快照模式）'); return; } // 快照模式工作中，别掐断
+    if (onReadyCb) { const cb = onReadyCb; onReadyCb = null; cb(); return; }
+    if (currentStreamUrl) {
+      // 连接已建立、正在等首帧：耐心等，别反复掐断重连
+      if (imgPending && Date.now() - streamStartedAt < 20000) { showScreenLoading('画面已接通，正在接收图像…'); return; }
+      startStream(null);
+    } else showScreenLoading('画面已就绪，正在接通…');
+    return;
+  }
+  if (st.dead) {
+    showScreenLoading('画面进程已重启，正在自动恢复…');
+    await api(`/api/accounts/${watchAccId}/screen/open`, 'POST', {}).catch(() => ({}));
+    return;
+  }
+  const el = Math.round((Date.now() - watchOpenedAt) / 1000);
+  showScreenLoading('正在启动云手机画面…（约还需 ' + Math.max(0, 24 - el) + ' 秒）');
+}
+function startWatchdog(cb) {
+  watchOpenedAt = Date.now();
+  streamFails = 0;
+  onReadyCb = cb || null;
+  clearInterval(watchdogTimer);
+  watchdogTimer = setInterval(watchdogTick, 3000);
+  watchdogTick();
+}
+
+/* ===== 看玩视图切换：云手机画面 / 139 网页版（设备列表） ===== */
+let watchView = 'phone';
+function setViewTabs(target) {
+  $('#wViewPhone').classList.toggle('on', target === 'phone');
+  $('#wViewConsole').classList.toggle('on', target === 'console');
+}
+async function switchWatchView(target) {
+  if (!watchAccId || watchView === target) return;
+  const r = await api(`/api/accounts/${watchAccId}/screen/page`, 'POST', { page: target }).catch((e) => ({ ok: false, message: e.message }));
+  if (!r || !r.ok) { toast((r && r.message) || '切换失败'); return; }
+  watchView = target;
+  setViewTabs(target);
+  if (r.respawned) {
+    showScreenLoading(target === 'console' ? '正在打开 139 网页版…' : '正在进入云手机画面…');
+    currentStreamUrl = r.streamUrl || currentStreamUrl;
+    startStream(currentStreamUrl, true);
+    startWatchdog();
+  } else {
+    // 同进程切换：MJPEG 流/快照轮询继续跑，画面会自动更新到新页面
+    toast(target === 'console' ? '已切到 139 网页版（设备列表）' : '已切回云手机画面');
+  }
+}
+$('#wViewPhone').addEventListener('click', () => switchWatchView('phone'));
+$('#wViewConsole').addEventListener('click', () => switchWatchView('console'));
+
+async function openWatch(id) {
+  watchAccId = id;
+  watchView = 'phone';
+  setViewTabs('phone');
+  const acc = state.accounts.find((a) => a.id === id);
+  $('#watchTitle').textContent = '云手机画面 · ' + (acc ? acc.title : '');
+  $('#watchMask').classList.add('show');
+  $('#wText').value = '';
+  setWatchStatus('');
+  showScreenLoading('正在启动云手机画面…（约还需 24 秒）');
+  const wr = await api(`/api/accounts/${id}/watch`, 'POST', { open: true }).catch(() => ({}));
+  if (wr.state) { state = wr.state; render(); }
+  const r = await api(`/api/accounts/${id}/screen/open`, 'POST', {}).catch(() => ({}));
+  if (r.state) { state = r.state; render(); }
+  if (!r.ok) {
+    showScreenLoading((r.message || '画面启动失败') + '，可点「重新加载」重试');
+    return;
+  }
+  // 快照逐帧方式：最稳，弱网/公网代理都能出画面（引擎没好时会自动重试）
+  currentStreamUrl = r.streamUrl || currentStreamUrl;
+  ensureImgHandlers(); // 关键：绑定首帧/失败回调，否则快照加载成功也不会显示
+  startSnapPoll();
+  startWatchdog();
+}
+
+async function closeWatch() {
+  $('#watchMask').classList.remove('show');
+  screenOn = false;
+  stopSnapPoll();
+  $('#screenImg').src = '';
+  clearInterval(watchdogTimer);
+  currentStreamUrl = '';
+  if (watchAccId) {
+    await api(`/api/accounts/${watchAccId}/screen/close`, 'POST', {}).catch(() => {});
+    await api(`/api/accounts/${watchAccId}/watch`, 'POST', { open: false }).catch(() => {});
+  }
+  load(true);
+}
+$('#watchClose').addEventListener('click', closeWatch);
+$('#wFinish').addEventListener('click', closeWatch);
+
+/* 画面点击 / 拖动 → 转发到真实页面 */
+function contentRect() {
+  const img = $('#screenImg');
+  const r = img.getBoundingClientRect();
+  const nw = img.naturalWidth || 400, nh = img.naturalHeight || 850;
+  const s = Math.min(r.width / nw, r.height / nh);
+  const w = nw * s, h = nh * s;
+  return { x: r.left + (r.width - w) / 2, y: r.top + (r.height - h) / 2, w, h };
+}
+function normPt(e) {
+  const c = contentRect();
+  return {
+    x: Math.max(0, Math.min(1, (e.clientX - c.x) / c.w)),
+    y: Math.max(0, Math.min(1, (e.clientY - c.y) / c.h))
+  };
+}
+let pd = null;
+const stage = $('#watchStage');
+stage.addEventListener('pointerdown', (e) => {
+  if ($('#screenImg').style.display === 'none') return;
+  const p = normPt(e);
+  pd = { x: p.x, y: p.y, cx: e.clientX, cy: e.clientY, moved: false, cur: null };
+});
+stage.addEventListener('pointermove', (e) => {
+  if (!pd) return;
+  if (Math.hypot(e.clientX - pd.cx, e.clientY - pd.cy) > 14) pd.moved = true;
+  if (pd.moved) pd.cur = normPt(e);
+});
+stage.addEventListener('pointerup', async (e) => {
+  if (!pd) return;
+  const d = pd;
+  pd = null;
+  if (!screenOn || !watchAccId) return;
+  try {
+    if (d.moved && d.cur) {
+      await api(`/api/accounts/${watchAccId}/screen/swipe`, 'POST', { x0: d.x, y0: d.y, x1: d.cur.x, y1: d.cur.y });
+    } else {
+      const p = normPt(e);
+      await api(`/api/accounts/${watchAccId}/screen/tap`, 'POST', { x: p.x, y: p.y });
+    }
+  } catch { /* 忽略转发失败 */ }
+});
+
+/* 控制栏 */
+$('#wReload').addEventListener('click', async () => {
+  if (!watchAccId) return;
+  showScreenLoading('正在回到登录页…');
+  // 确保画面进程活着（被停掉时自动重新打开）
+  const r = await api(`/api/accounts/${watchAccId}/screen/open`, 'POST', {}).catch(() => ({}));
+  if (r.state) { state = r.state; render(); }
+  if (!r.ok) {
+    showScreenLoading((r.message || '画面启动失败') + '，可关闭后重试');
+    return;
+  }
+  // 等画面就绪 → 清空登录状态回到 139 短信登录页（可登录新的云手机账号）
+  const doFresh = async () => {
+    const fr = await api(`/api/accounts/${watchAccId}/screen/fresh`, 'POST', {}).catch(() => ({}));
+    currentStreamUrl = r.streamUrl || currentStreamUrl;
+    startSnapPoll();
+    toast(fr.ok ? '已回到登录页，可在画面里登录新账号' : (fr.message || '已重新加载'));
+  };
+  if (r.ready) { doFresh(); return; }
+  showScreenLoading('正在启动云手机画面…（约还需 24 秒）');
+  currentStreamUrl = r.streamUrl || '';
+  startWatchdog(doFresh);
+});
+$('#wStop').addEventListener('click', async () => {
+  if (!watchAccId) return;
+  await api(`/api/accounts/${watchAccId}/screen/close`, 'POST', {});
+  screenOn = false;
+  $('#screenImg').src = '';
+  showScreenLoading('画面已停止，点「重新加载」可重新打开');
+  toast('已停掉画面');
+});
+$('#wAudio').addEventListener('click', async () => {
+  if (!watchAccId) return;
+  audioMuted = !audioMuted;
+  await api(`/api/accounts/${watchAccId}/screen/audio`, 'POST', { muted: audioMuted });
+  $('#wAudio').textContent = audioMuted ? '🔊 声音' : '🔇 静音';
+  toast(audioMuted ? '已静音' : '声音已开启（画面为图像串流，仅对页面内音频生效）');
+});
+$('#wSendText').addEventListener('click', async () => {
+  const t = $('#wText').value.trim();
+  if (!t) return toast('先输入要发送的内容');
+  if (!screenOn) return toast('画面未开启');
+  const r = await api(`/api/accounts/${watchAccId}/screen/text`, 'POST', { text: t, enter: true });
+  if (r.ok) { $('#wText').value = ''; toast('已发送到云手机'); }
+  else toast(r.message || '发送失败');
+});
+
+/* 自动滑块：检测到画面里出现滑块时自动触发（无需手动按钮） */
+let solving = false;
+async function solveSlider(auto) {
+  if (!watchAccId || !screenOn || solving) return;
+  solving = true;
+  const btn = $('#wSolve');
+  if (btn) { btn.disabled = true; btn.textContent = '识别中…'; }
+  if (auto) setWatchStatus('画面里出现滑块验证，正在自动识别并拖动…（画面会短暂停顿，属正常）');
+  try {
+    const r = await api(`/api/accounts/${watchAccId}/screen/solve-slider`, 'POST', {});
+    if (r.ok) {
+      toast(auto ? '已自动通过滑块' : (r.message || '滑块已通过'));
+      if (auto) setWatchStatus('');
+    } else if (!r.busy) {
+      setWatchStatus(r.message || '滑块未通过，可直接在画面里手动拖动');
+      if (auto) toast('滑块自动识别未通过，可手动拖动或再试');
+    }
+  } catch { /* 忽略 */ }
+  solving = false;
+  if (btn) { btn.disabled = false; btn.textContent = '🤖 自动滑块'; }
+}
+$('#wSolve').addEventListener('click', () => solveSlider(false));
+
+/* 画面开着时定期同步状态（token / 真实设备编号自动回面板 + 滑块自动识别） */
+let devSyncTried = false;
+setInterval(async () => {
+  if (!watchAccId || !$('#watchMask').classList.contains('show')) return;
+  try {
+    const r = await api(`/api/accounts/${watchAccId}/screen/status`, 'POST', {});
+    if (r.ok && r.token) {
+      const before = JSON.stringify(state && state.accounts ? state.accounts.map((a) => [a.id, a.cpTokenSet, (a.devices || [])[0] && a.devices[0].id]) : '');
+      await load(true);
+      const after = JSON.stringify(state.accounts.map((a) => [a.id, a.cpTokenSet, (a.devices || [])[0] && a.devices[0].id]));
+      if (before !== after) { render(); toast('登录态/设备编号已同步到面板'); }
+      // 登录了但还没有设备记录：自动从服务器拉一次真实设备列表
+      const acc = state.accounts.find((a) => a.id === watchAccId);
+      if (acc && !((acc.devices || [])[0] || {}).id && !devSyncTried) {
+        devSyncTried = true;
+        const rr = await api(`/api/accounts/${watchAccId}/devices/refresh`, 'POST', {});
+        if (rr.state) { state = rr.state; render(); }
+        if (rr.ok) toast('已同步云手机设备：' + rr.message.replace(/^已同步：/, ''));
+      }
+    }
+    if (r.ok && r.hasSlider && !solving) solveSlider(true);
+  } catch { /* 忽略 */ }
+}, 6000);
+
+/* 短信登录弹窗（面板直登） */
+$('#btnLogin').addEventListener('click', () => { setLoginMsg(''); open('#maskLogin'); });
+
+/* ===== ＋添加账号：面板内短信登录（登录即添加） ===== */
+let addSid = null, addSnapTimer = null, addPollTimer = null, addCountdown = null, addRetryTimer = null, addAutoRetry = 2, addVerifying = false;
+
+function addMsg(text, cls) {
+  const el = $('#addMsg');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'login-msg' + (cls ? ' ' + cls : '');
+}
+function addStep(n) {
+  $$('#addSteps span').forEach((el) => {
+    const i = Number(el.dataset.step);
+    el.classList.toggle('on', i === n);
+    el.classList.toggle('done', i < n);
+  });
+}
+function stopAddTimers() {
+  clearInterval(addSnapTimer); addSnapTimer = null;
+  clearInterval(addPollTimer); addPollTimer = null;
+  clearInterval(addCountdown); addCountdown = null;
+  clearInterval(addRetryTimer); addRetryTimer = null;
+}
+function resetAdd(closeWorker) {
+  stopAddTimers();
+  addVerifying = false;
+  if (closeWorker && addSid) api('/api/sessions/' + addSid + '/close', 'POST', {}).catch(() => {});
+  addSid = null;
+  $('#addPhone').value = ''; $('#addTitle').value = ''; $('#addCode').value = '';
+  $('#addCodeWrap').style.display = 'none';
+  $('#addSnapBox').style.display = 'none';
+  $('#addSnap').removeAttribute('src');
+  $('#btnAddSend').disabled = false; $('#btnAddSend').textContent = '发送验证码';
+  $('#btnAddSubmit').disabled = false; $('#btnAddSubmit').textContent = '登录并添加';
+  addMsg('');
+  addStep(1);
+}
+function startAddSnap() {
+  $('#addSnapBox').style.display = 'block';
+  const tick = () => {
+    if (!addSid) return;
+    $('#addSnap').src = `/api/sessions/${addSid}/snap?token=${encodeURIComponent(authToken)}&t=${Date.now()}`;
+  };
+  tick();
+  addSnapTimer = setInterval(tick, 2500);
+}
+function pollAddState() {
+  clearInterval(addPollTimer);
+  addPollTimer = setInterval(async () => {
+    if (!addSid) return;
+    let st;
+    try { st = await api('/api/sessions/' + addSid + '/state'); } catch { return; }
+    if (!st || !st.ok) return;
+    if (st.phase === 'booting') { addStep(1); addMsg(st.message || '正在打开 139 登录页…', 'info'); }
+    else if (st.phase === 'form') { addStep(2); addMsg(st.message || '登录页已就绪，请点「发送验证码」', 'info'); }
+    else if (st.phase === 'sending') { addStep(2); addMsg(st.message || '正在过滑块并发送验证码…', 'info'); }
+    else if (st.phase === 'sent') {
+      addStep(2);
+      addAutoRetry = 2; // 发送成功 → 重置自动重试次数
+      if (addCountdown) return; // 倒计时已在进行，不重复触发
+      addMsg('验证码已发送，请查收短信后输入', 'ok');
+      $('#addCode').focus();
+      let n = 60;
+      $('#btnAddSend').disabled = true;
+      $('#btnAddSend').textContent = n + 's 后重发';
+      addCountdown = setInterval(() => {
+        n -= 1;
+        if (n <= 0) {
+          clearInterval(addCountdown); addCountdown = null;
+          $('#btnAddSend').disabled = false;
+          $('#btnAddSend').textContent = '重新发送';
+        } else {
+          $('#btnAddSend').textContent = n + 's 后重发';
+        }
+      }, 1000);
+    } else if (st.phase === 'verifying') {
+      addStep(3);
+      addMsg(st.message || '正在提交验证码…', 'info');
+      $('#btnAddSubmit').textContent = '登录中… ' + (st.message || '').replace(/^正在/, '');
+    } else if (st.phase === 'ok') {
+      if (!addVerifying) return;
+      finishAddLogin(st.accountId);
+    } else if (st.phase === 'idle' && addVerifying) {
+      // 登录页进程意外退出
+      addVerifying = false;
+      $('#btnAddSubmit').disabled = false; $('#btnAddSubmit').textContent = '确认登录';
+      addMsg('登录页已关闭，请重新点「发送验证码」再试', 'bad');
+      addStep(2);
+    } else if (st.phase === 'error') {
+      if (addVerifying) {
+        // 提交验证码阶段失败：直接显示原因（验证码可能已被消费，不自动重发）
+        addVerifying = false;
+        $('#btnAddSubmit').disabled = false; $('#btnAddSubmit').textContent = '确认登录';
+        addMsg(st.message || '登录未完成，请重试', 'bad');
+        return;
+      }
+      const m = st.message || '';
+      if (/滑块|发送失败/.test(m) && addAutoRetry > 0 && !addRetryTimer) {
+        // 滑块没过 → 倒计时后自动重新获取（无需手动点）
+        addAutoRetry -= 1;
+        const left = addAutoRetry + 1;
+        let n = 6;
+        addMsg(`滑块未通过，${n} 秒后自动重新获取（自动重试还剩 ${left} 次）…`, 'bad');
+        addRetryTimer = setInterval(() => {
+          n -= 1;
+          if (n <= 0) {
+            clearInterval(addRetryTimer); addRetryTimer = null;
+            sendAddCode();
+          } else {
+            addMsg(`滑块未通过，${n} 秒后自动重新获取（自动重试还剩 ${left} 次）…`, 'bad');
+          }
+        }, 1000);
+      } else {
+        addMsg(m || '出错了，请重试', 'bad');
+        if (addAutoRetry <= 0 && /滑块/.test(m)) addMsg(m + '。自动重试已达上限，请等 1~2 分钟再点「重新发送」（会重置自动重试）', 'bad');
+        $('#btnAddSend').disabled = false;
+        $('#btnAddSend').textContent = '重新发送';
+      }
+    }
+  }, 2000);
+}
+
+$('#btnLogin1').addEventListener('click', () => { resetAdd(true); open('#maskAdd'); });
+
+/* ===== 139网页登录：创建账号并打开画面里的 139 登录页，手动登录后 token 自动回写面板 ===== */
+$('#btnWeb139').addEventListener('click', () => { $('#web139Name').value = ''; open('#maskWeb139'); });
+$('#btnWeb139Go').addEventListener('click', async () => {
+  const btn = $('#btnWeb139Go');
+  btn.disabled = true; btn.textContent = '创建中…';
+  const n = new Date();
+  const name = ($('#web139Name').value || '').trim()
+    || ('139登录-' + (n.getMonth() + 1) + '月' + n.getDate() + '日-' + String(n.getHours()).padStart(2, '0') + String(n.getMinutes()).padStart(2, '0'));
+  const r = await api('/api/accounts', 'POST', { title: name, note: '139网页登录创建' }).catch((e) => ({ ok: false, message: e.message }));
+  btn.disabled = false; btn.textContent = '创建并打开 139 登录页';
+  if (!r.ok) return toast(r.message || '创建失败');
+  if (r.state) { state = r.state; render(); }
+  document.querySelector('#maskWeb139').classList.remove('show');
+  toast('139 登录页已打开，在画面里短信登录即可，成功后自动回写');
+  openWatch(r.id);
+});
+$('#maskAdd').addEventListener('click', (e) => { if (e.target.closest('[data-close="#maskAdd"]')) resetAdd(true); });
+
+/* 第一步：点「登录并添加」→ 建/复用账号 + 启动 139 登录页 */
+async function startAddSession() {
+  const phone = $('#addPhone').value.trim();
+  if (!/^1\d{10}$/.test(phone)) { toast('请输入 11 位手机号'); $('#addPhone').focus(); return false; }
+  const btn = $('#btnAddSubmit');
+  btn.disabled = true; btn.textContent = '正在打开登录页…';
+  addStep(1);
+  addMsg('正在打开 139 登录页（首次约 10~20 秒）…', 'info');
+  const b = await api('/api/sessions/begin', 'POST', { phone, title: $('#addTitle').value.trim() }).catch((e) => ({ ok: false, message: e.message }));
+  btn.disabled = false;
+  if (!b.ok) {
+    btn.textContent = '登录并添加';
+    addMsg(b.message || '启动失败', 'bad');
+    return false;
+  }
+  if (b.state) { state = b.state; render(); }
+  addSid = b.accountId;
+  $('#addCodeWrap').style.display = '';
+  $('#btnAddSubmit').textContent = '确认登录';
+  startAddSnap();
+  pollAddState();
+  addStep(2);
+  addMsg('登录页已打开，点「发送验证码」，收到短信后输入验证码', 'info');
+  $('#btnAddSend').focus();
+  return true;
+}
+
+/* 第二步：发送验证码（手动点 = 重置自动重试；滑块失败后也会自动重发） */
+async function sendAddCode() {
+  if (!addSid) {
+    const ok = await startAddSession();
+    if (!ok) return;
+  }
+  const phone = $('#addPhone').value.trim();
+  const btn = $('#btnAddSend');
+  btn.disabled = true; btn.textContent = '发送中…';
+  addStep(2);
+  addMsg('正在过滑块并发送验证码（最多自动尝试 3 轮）…', 'info');
+  const r = await api('/api/sessions/' + addSid + '/send', 'POST', { phone }).catch((e) => ({ ok: false, message: e.message }));
+  if (!r || !r.ok) {
+    btn.disabled = false; btn.textContent = '重新发送';
+    // 滑块类失败交给轮询里的自动重试倒计时处理
+    if (r && r.message && !/滑块/.test(r.message)) addMsg(r.message, 'bad');
+  }
+}
+$('#btnAddSend').addEventListener('click', () => {
+  addAutoRetry = 2;
+  if (addRetryTimer) { clearInterval(addRetryTimer); addRetryTimer = null; }
+  sendAddCode();
+});
+
+/* 登录完成收尾：关弹窗 → 打开看玩画面 */
+async function finishAddLogin(accId) {
+  addVerifying = false;
+  addMsg('✅ 登录成功：token 已回写面板，保活与看玩共用同一会话', 'ok');
+  $$('#addSteps span').forEach((el) => { el.classList.add('done'); el.classList.remove('on'); });
+  toast('登录成功，会话已就绪');
+  await new Promise((res) => setTimeout(res, 700));
+  stopAddTimers();
+  addSid = null;
+  close('#maskAdd');
+  resetAdd(false);
+  setTimeout(() => openWatch(accId), 300);
+}
+
+/* 第三步：点「确认登录」→ 提交验证码（异步）→ 轮询显示进度 → token 回写 */
+$('#btnAddSubmit').addEventListener('click', async () => {
+  if (!addSid) { startAddSession(); return; }
+  if (addVerifying) return;
+  const code = $('#addCode').value.replace(/\D/g, '');
+  if (code.length < 4) {
+    addMsg('请先点「发送验证码」，收到短信后输入 4~6 位验证码', 'bad');
+    $('#addCode').focus();
+    return;
+  }
+  const btn = $('#btnAddSubmit');
+  btn.disabled = true; btn.textContent = '登录中…';
+  addStep(3);
+  addVerifying = true;
+  addMsg('正在提交验证码并抓取登录态（一般 10~60 秒，下方会显示进度）…', 'info');
+  const r = await api('/api/sessions/' + addSid + '/verify', 'POST', { code }).catch((e) => ({ ok: false, message: e.message }));
+  if (!r.ok) {
+    addVerifying = false;
+    btn.disabled = false; btn.textContent = '确认登录';
+    addMsg(r.message || '登录失败，请重试', 'bad');
+    addStep(2);
+    return;
+  }
+  if (r.state) { state = r.state; render(); }
+  // 后台正在抓取登录态：pollAddState 每 2 秒显示进度，phase==='ok' 时自动收尾
+});
+// 输完 11 位手机号即预启动画面引擎（点获取验证码时浏览器已就绪，发送只需几秒）
+let prewarmedPhone = '';
+$('#loginPhone').addEventListener('input', async () => {
+  const phone = $('#loginPhone').value.trim();
+  if (/^1\d{10}$/.test(phone) && phone !== prewarmedPhone) {
+    prewarmedPhone = phone;
+    api('/api/auth/sms/prewarm', 'POST', { phone }).catch(() => {});
+  }
+});
+let sendPollTimer = null;
+$('#btnSendCode').addEventListener('click', async () => {
+  const phone = $('#loginPhone').value.trim();
+  if (!/^1\d{10}$/.test(phone)) return toast('请输入 11 位手机号');
+  const btn = $('#btnSendCode');
+  btn.disabled = true; btn.textContent = '准备中…';
+  clearInterval(sendPollTimer);
+  const r = await api('/api/auth/sms/send', 'POST', { phone }).catch(() => ({ ok: false, message: '连接失败' }));
+  if (r.state) { state = r.state; render(); }
+  if (!r.ok || !r.async) {
+    btn.disabled = false; btn.textContent = '获取验证码';
+    return toast(r.message || '发送失败，请重试');
+  }
+  // 后台发送中：轮询进度（启动引擎 → 填号过滑块 → 已发送）
+  const accId = r.accountId;
+  sendPollTimer = setInterval(async () => {
+    try {
+      const st = await api(`/api/auth/sms/state?acc=${accId}`);
+      if (st.phase === 'booting') { btn.textContent = '启动画面引擎…'; return; }
+      if (st.phase === 'sending') { btn.textContent = '过滑块发短信…'; return; }
+      clearInterval(sendPollTimer);
+      if (st.phase === 'sent') {
+        toast(st.message || '验证码已发送');
+        setLoginMsg('验证码已发送至手机，请查收！', 'ok');
+        let n = 60; btn.textContent = n + 's 后重发';
+        const t = setInterval(() => {
+          n -= 1;
+          if (n <= 0) { clearInterval(t); btn.disabled = false; btn.textContent = '获取验证码'; }
+          else btn.textContent = n + 's';
+        }, 1000);
+      } else {
+        btn.disabled = false; btn.textContent = '获取验证码';
+        toast(st.message || '发送失败，请重试');
+      }
+    } catch { /* 忽略轮询失败 */ }
+  }, 2000);
+  btn.textContent = '启动画面引擎…';
+});
+let smsPollTimer = null;
+function setLoginMsg(text, cls) {
+  const el = $('#loginMsg');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'login-msg' + (cls ? ' ' + cls : '');
+}
+$$('.login-tabs .ltab').forEach((t) => t.addEventListener('click', () => {
+  $$('.login-tabs .ltab').forEach((x) => x.classList.remove('on'));
+  t.classList.add('on');
+  setLoginMsg(t.textContent.includes('手动') ? '手动凭据导入：在账号卡「编辑」里填入 token 与设备编号即可绑定已有云手机。' : '', t.textContent.includes('手动') ? 'info' : '');
+}));
+$('#btnLoginSubmit').addEventListener('click', async () => {
+  const phone = $('#loginPhone').value.trim();
+  const code = $('#loginCode').value.trim();
+  if (!/^1\d{10}$/.test(phone)) return toast('请输入 11 位手机号');
+  if (!/^\d{4,8}$/.test(code)) return toast('请输入验证码');
+  const btn = $('#btnLoginSubmit');
+  btn.disabled = true; btn.textContent = '登录中…';
+  setLoginMsg('正在登录并自动发现云手机…', 'info');
+  const r = await api('/api/auth/sms/verify', 'POST', { phone, code, product }).catch(() => ({ ok: false, message: '连接失败' }));
+  if (r.state) { state = r.state; render(); }
+  if (!r.ok) {
+    btn.disabled = false; btn.textContent = '登录并自动发现云手机';
+    setLoginMsg(r.message || '登录失败，请重试', 'bad');
+    return;
+  }
+  // 后台登录中：轮询该账号是否已拿到 token（最多 2 分钟），拿到后自动发现云手机
+  const targetId = r.accountId;
+  let waited = 0, discovered = false;
+  clearInterval(smsPollTimer);
+  smsPollTimer = setInterval(async () => {
+    waited += 3000;
+    try {
+      const st = await api('/api/state');
+      state = st; render();
+      const acc = (st.accounts || []).find((a) => a.id === targetId);
+      if (acc && acc.cpTokenSet && !discovered) {
+        discovered = true;
+        // 登录成功 → 自动发现云手机（从服务器拉设备列表）
+        setLoginMsg('登录成功，正在自动发现云手机…', 'info');
+        const rr = await api(`/api/accounts/${targetId}/devices/refresh`, 'POST', {}).catch(() => ({}));
+        if (rr.state) { state = rr.state; render(); }
+        btn.disabled = false; btn.textContent = '登录并自动发现云手机';
+        const acc2 = (state.accounts || []).find((a) => a.id === targetId);
+        const devs = (acc2 && acc2.devices) || [];
+        if (devs.length) {
+          setLoginMsg('登录成功，发现 ' + devs.length + ' 台云手机：' + devs.map((d) => d.id).join('、'), 'ok');
+          toast('✅ 云手机已显示在账号卡上');
+        } else {
+          setLoginMsg('登录成功但未发现任何可用的云机，成功发现 0 台云机（该手机号名下没有云手机，可在云手机 App 里领取免费体验）', 'bad');
+          toast('该手机号名下暂无云手机');
+        }
+        clearInterval(smsPollTimer);
+        return;
+      }
+    } catch { /* 忽略轮询失败 */ }
+    if (waited >= 120000) {
+      clearInterval(smsPollTimer);
+      btn.disabled = false; btn.textContent = '登录并自动发现云手机';
+      setLoginMsg('登录超时未完成，请重试', 'bad');
+    } else {
+      btn.textContent = '登录中… ' + Math.round((120000 - waited) / 1000) + 's';
+    }
+  }, 3000);
+});
+
+/* 保活设置 */
+$('#btnSettings').addEventListener('click', () => {
+  $('#setApiMode').value = state.settings.apiMode || 'mock';
+  $('#setInterval').value = state.settings.intervalMinutes;
+  $('#setRefresh').value = state.settings.autoRefreshSeconds;
+  $('#setWatch').value = state.settings.watchMode;
+  $('#setRegReview').value = state.settings.regReview ? '1' : '0';
+  open('#maskSettings');
+});
+$('#btnSettingsSave').addEventListener('click', async () => {
+  const r = await api('/api/settings', 'POST', {
+    apiMode: $('#setApiMode').value,
+    intervalMinutes: Number($('#setInterval').value),
+    autoRefreshSeconds: Number($('#setRefresh').value),
+    watchMode: $('#setWatch').value,
+    regReview: $('#setRegReview').value === '1'
+  });
+  state = r.state; render(); close('#maskSettings'); toast('设置已保存');
+});
+
+/* 真实接口接入 */
+$('#btnCurlImport').addEventListener('click', async () => {
+  const curl = $('#setCurl').value.trim();
+  if (!curl) return toast('先粘贴 cURL 命令');
+  const r = await api('/api/adapter/config', 'POST', { curl });
+  if (r.state) { state = r.state; render(); }
+  toast(r.message || (r.ok ? '已导入' : '导入失败'));
+});
+$('#btnAdapterTest').addEventListener('click', async () => {
+  toast('正在真实请求一次…');
+  const r = await api('/api/adapter/test', 'POST', {});
+  toast(r.message || (r.ok ? '连通正常' : '失败'));
+});
+$('#btnCurlClear').addEventListener('click', async () => {
+  if (!confirm('清除已保存的真实接口配置？')) return;
+  const r = await api('/api/adapter/config', 'POST', { clear: true });
+  state = r.state; render(); toast('已清除');
+});
+
+/* 账号卡片事件（事件委托） */
+$('#accList').addEventListener('click', async (e) => {
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  const card = e.target.closest('.acc');
+  const id = card.dataset.id;
+  const acc = state.accounts.find((a) => a.id === id);
+  const act = el.dataset.act;
+
+  if (act === 'power') {
+    el.disabled = true;
+    const devId = el.dataset.device || (acc.devices[0] || {}).id;
+    const r = await api(`/api/devices/${devId}/power`, 'POST', { action: el.dataset.power });
+    if (r.state) { state = r.state; render(); }
+    toast(r.message || '已下发');
+  }
+  if (act === 'watch') openWatch(id);
+  if (act === 'refreshdev') {
+    el.disabled = true; el.textContent = '刷新中…';
+    const r = await api(`/api/accounts/${id}/devices/refresh`, 'POST', {});
+    el.disabled = false; el.textContent = '从服务器刷新';
+    state = (r.state && r.state.accounts) ? r.state : state;
+    render();
+    toast(r.message || (r.ok ? '已同步' : '未查到记录'));
+  }
+  if (act === 'more') toast('更多查询：套餐余量 / 串流时长 / 到期时间（真实版接运营商查询接口）');
+  if (act === 'renew') {
+    el.disabled = true; el.textContent = '续期中…';
+    const r = await api(`/api/accounts/${id}/run`, 'POST', { type: 'renew' });
+    state = r.state; render();
+    if (r.ok) {
+      const acc2 = (state.accounts || []).find((x) => x.id === id);
+      showResult({
+        ok: true,
+        title: '续期成功',
+        html: `${acc2 ? '<b>' + esc(acc2.title) + '</b><br>' : ''}已续期 <b>+30 天</b>` +
+              (acc2 && acc2.expireAt ? `<br><span class="expire">有效期至 ${fmtTime(acc2.expireAt)}</span>` : '')
+      });
+    } else {
+      showResult({ ok: false, title: '续期失败', html: esc(r.message || '请稍后重试') });
+    }
+  }
+  if (act === 'setdays') {
+    // 管理员单独设置该云手机剩余有效天数（最小 1 天，客户端无此按钮）
+    const a2 = (state.accounts || []).find((x) => x.id === id);
+    const left = a2 && a2.expireAt ? Math.max(1, Math.ceil((a2.expireAt - Date.now()) / 86400000)) : 2;
+    const days = await askDays('为 <b>' + esc(a2 ? (a2.phone || a2.title) : '') + '</b> 设置剩余有效天数', left);
+    if (days === null) return;
+    el.disabled = true; el.textContent = '设置中…';
+    const r = await api(`/api/accounts/${id}/days`, 'PATCH', { days }).catch((e) => ({ ok: false, message: e.message }));
+    if (r.state) { state = r.state; render(); }
+    if (r.ok) {
+      const acc2 = (state.accounts || []).find((x) => x.id === id);
+      showResult({
+        ok: true,
+        title: '设置成功',
+        html: `${acc2 ? '<b>' + esc(acc2.title) + '</b><br>' : ''}有效期已设为 <b>${days} 天</b>` +
+              (acc2 && acc2.expireAt ? `<br><span class="expire">有效期至 ${fmtTime(acc2.expireAt)}</span>` : '')
+      });
+    } else {
+      showResult({ ok: false, title: '设置失败', html: esc(r.message || '请稍后重试') });
+    }
+    return;
+  }
+  if (act === 'edit') {
+    editingId = id;
+    $('#editTitle').value = acc.title;
+    $('#editPhone').value = acc.phone || '';
+    $('#editNote').value = acc.note || '';
+    $('#editWatch').value = acc.watch || 'off';
+    $('#editCpToken').value = '';
+    $('#editCpFp').value = '';
+    open('#maskEdit');
+  }
+  if (act === 'toggle') {
+    const r = await api(`/api/accounts/${id}`, 'PATCH', { enabled: !acc.enabled });
+    state = r.state; render();
+    toast(!acc.enabled ? '已启用保活' : '已停用');
+  }
+  if (act === 'del') {
+    if (!confirm(`删除账号「${acc.title}」？删除后该账号的保活和设备记录都会移除。`)) return;
+    const r = await api(`/api/accounts/${id}`, 'DELETE');
+    state = r.state; render(); toast('已删除');
+  }
+  if (act === 'watchcycle') {
+    const order = ['off', 'resident', 'scheduled'];
+    const next = order[(order.indexOf(acc.watch || 'off') + 1) % order.length];
+    const r = await api(`/api/accounts/${id}`, 'PATCH', { watch: next });
+    state = r.state; render();
+    toast('看玩保活：' + WATCH_TEXT[next]);
+  }
+});
+$('#btnEditSave').addEventListener('click', async () => {
+  if (!editingId) return;
+  const body = {
+    title: $('#editTitle').value.trim(),
+    phone: $('#editPhone').value.trim(),
+    note: $('#editNote').value.trim(),
+    watch: $('#editWatch').value
+  };
+  const tk = $('#editCpToken').value.trim();
+  const fp = $('#editCpFp').value.trim();
+  if (tk) body.cpToken = tk;
+  if (fp) body.cpDeviceFp = fp;
+  const r = await api(`/api/accounts/${editingId}`, 'PATCH', body);
+  state = r.state; render(); close('#maskEdit'); toast(tk ? '已保存，真实登录态已导入' : '已保存');
+});
+
+/* 每秒倒计时 + 自动刷新 */
+setInterval(() => {
+  if (!state) return;
+  autoLeft -= 1;
+  const el = $('#autoLeft');
+  if (el) el.textContent = Math.max(autoLeft, 0);
+  if (state.lastRoundAt) $('#sLast').textContent = rel(state.lastRoundAt);
+  if (state.nextRoundAt) $('#sNext').textContent = rel(state.nextRoundAt, true);
+  if (autoLeft <= 0) load(true);
+}, 1000);
+
+/* 启动：先校验登录态，未登录则弹登录页 */
+(async () => {
+  if (authToken) {
+    try {
+      const r = await fetch('/api/auth/me', { headers: { 'x-auth-token': authToken } });
+      if (r.ok) {
+        me = (await r.json()).me;
+        showLogin(false); // 解锁主界面（body.locked），自动登录路径也要走
+        await load(true);
+        applyMe();
+        autoOpenFromUrl();
+        return;
+      }
+    } catch { /* 掉到登录页 */ }
+  }
+  authToken = '';
+  localStorage.removeItem('kp_token');
+  showLogin(true);
+})();
+
+/* 直达链接：/?sharecode=xxx&acc=账号编号 → 打开后自动进入该账号的看玩画面 */
+function autoOpenFromUrl() {
+  try {
+    const u = new URL(location.href);
+    const accId = u.searchParams.get('acc');
+    if (!accId || !state || !state.accounts) return;
+    const acc = state.accounts.find((a) => a.id === accId);
+    if (!acc) { toast('链接里的账号不存在或无权访问'); return; }
+    openWatch(acc.id);
+    u.searchParams.delete('acc');
+    history.replaceState(null, '', u.pathname + '?' + u.searchParams.toString() + location.hash);
+  } catch { /* ignore */ }
+}
+</script>
+</body>
+</html>

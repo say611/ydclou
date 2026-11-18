@@ -1,0 +1,15 @@
+# 运行时数据（首次运行会自动生成，含 token，勿提交）
+data/
+# 抓包原料（真实接口分析用，体积大且非运行必需）
+cap/
+# 本地凭据/备份
+r2.json
+*.private-backup.json
+# 杂项
+node_modules/
+*.log
+*.zip
+.DS_Store
+Thumbs.db
+ui*.png
+drv*.png
