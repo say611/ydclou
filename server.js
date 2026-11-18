@@ -894,32 +894,27 @@ async function handle(req, res, pathname, qs) {
 
     await sleep(1200);
 
-    // 关键：弹窗会先出现骨架，图片是异步加载的；没等图片 ready 去量缺口必然量错
+    // 关键：弹窗会先出现骨架，图片是异步加载的；没等图片 ready 去量缺口必然量错。
+    // 只认 <img> 的真实尺寸，不用 toast 文案判断（该文案会常驻，容易误判）
     const imagesReady = () => bs.waitFor(`(() => {
       const a = document.querySelector('.img_bg img');
       const p = document.querySelector('.img_slider img');
       if (!a || !p) return false;
-      if (!(a.complete && p.complete && a.naturalWidth > 0 && p.naturalWidth > 0)) return false;
-      const toast = document.querySelector('.van-toast, [class*=toast]');
-      if (toast && /加载中|loading/i.test(toast.innerText || '')) return false;
-      return true;
-    })()`, 12000, 250);
+      return !!(a.complete && p.complete && a.naturalWidth > 0 && p.naturalWidth > 0);
+    })()`, 15000, 250);
 
-    // 拼图滑块最多试 3 轮，失败会换新图，交替使用两种定位策略
+    // 拼图滑块最多试 3 轮（失败会换新图），每轮都重新读图重算
     const steps = [];
-    const strategies = ['geom', 'sad', 'geom'];
-    for (let i = 0; i < strategies.length; i++) {
+    for (let i = 0; i < 3; i++) {
       const hasSlider = await bs.evalJs(`!!document.querySelector('.dv_handler')`);
       if (!hasSlider) break;
       const ready = await imagesReady();
       if (!ready) { steps.push(`第${i + 1}次：图片未加载完，跳过`); continue; }
-      const r = await bs.solveSlider(strategies[i]);
+      const r = await bs.solveSlider();
       const dbg = `dist=${r.dist == null ? '-' : r.dist} moved=${r.drag ? r.drag.moved : '-'}`
-        + (r.geo ? ` 簇=${JSON.stringify(r.geo.whiteSpan || null)} sad=${r.geo.sadOffset}` : '')
+        + (r.geo ? ` off=${r.geo.off} score=${r.geo.score} 峰比=${r.geo.ratio} 对齐误差=${r.drag ? r.drag.err : '-'}px` : '')
         + (r.after && r.after.toast ? ` 提示=${r.after.toast}` : '');
-      steps.push(r.ok
-        ? `第${i + 1}次滑块通过 ${r.dist}px（${strategies[i]}）`
-        : `第${i + 1}次失败(${strategies[i]}) ${dbg}`);
+      steps.push(r.ok ? `第${i + 1}次滑块通过 ${r.dist}px` : `第${i + 1}次失败 ${dbg}`);
       if (r.ok) break;
       await sleep(1600);
     }
