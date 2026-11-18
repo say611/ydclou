@@ -1,0 +1,8 @@
+# 统一换行处理
+* text=auto
+
+# Windows 批处理必须原样保留 CRLF：-text 关闭行尾转换，
+# 否则 Git 会把 CRLF 归一化成 LF 存进仓库，从 GitHub 下载 ZIP 后
+# 拿到的 bat 是 LF 换行，双击运行可能出现命令错位。
+*.bat -text
+*.cmd -text
